@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: wrgg-environment-apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - matrix:
+        generators:
+          # The environment overlay replaces this list with exactly one
+          # environment and its currently deployed release pointers.
+          - list:
+              elements: []
+          - list:
+              elements:
+                - component: bootstrap
+                  applicationName: wrgg-bootstrap
+                  chartPath: charts/bootstrap
+                  helmReleaseName: wrgg-bootstrap
+                  syncWave: "0"
+                - component: runtime
+                  applicationName: winrates-gg-runtime
+                  chartPath: charts/runtime
+                  helmReleaseName: winrates-gg-runtime
+                  syncWave: "1"
+                - component: reconcile
+                  applicationName: winrates-gg-reconcile
+                  chartPath: charts/reconcile
+                  helmReleaseName: winrates-gg-reconcile
+                  syncWave: "2"
+  template:
+    metadata:
+      name: "{{ .applicationName }}"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "{{ .syncWave }}"
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/winrates-gg/k8s-helm-charts.git
+          targetRevision: "{{ .chartRevision }}"
+          path: "{{ .chartPath }}"
+          helm:
+            releaseName: "{{ .helmReleaseName }}"
+            valueFiles:
+              - "$values/environments/{{ .environment }}/values/{{ .component }}.yaml"
+              - "$values/releases/backend/{{ .backendReleaseId }}.yaml"
+        - repoURL: https://github.com/winrates-gg/k8s-live.git
+          targetRevision: main
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ if eq .component \"bootstrap\" }}argocd{{ else }}{{ .environment }}{{ end }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - SkipDryRunOnMissingResource=true

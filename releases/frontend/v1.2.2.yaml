@@ -1,0 +1,6 @@
+release:
+  id: v1.2.2
+  artifact: frontend
+  source:
+    repository: winrates-gg/frontend
+    ref: v1.2.2

@@ -1,0 +1,5 @@
+tailnet:
+  domain: minuet-lake.ts.net
+
+controlPlane:
+  shortName: wrgg-production-control-plane

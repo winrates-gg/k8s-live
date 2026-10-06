@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: wrgg-staging-root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/winrates-gg/k8s-live.git
+    targetRevision: main
+    path: apps/overlays/staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
