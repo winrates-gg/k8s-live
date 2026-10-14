@@ -34,6 +34,13 @@ but Argo must not use an ignored file as a substitute for an external revision
 selector. The current `releases/` files and `main`-tracking wiring are legacy
 implementation details to be migrated to this model.
 
+Deployment receipts are recorded separately under
+`releases/deployments/<environment>/<artifact>/`. A receipt is written only
+after the CI operation succeeds and includes the candidate ID, source revision,
+artifact status, deployment status, and a `deployed: true` or `false` value.
+Receipts are environment-specific so staging and production history cannot be
+confused.
+
 The backend API and worker image repositories should be defined once per
 environment and consumed by both runtime and reconcile charts. The selected
 backend candidate supplies the immutable API and worker digests.
@@ -47,6 +54,7 @@ apps/overlays/production/   Production Argo entry point
 environments/<env>/values/  Environment-specific Helm values
 releases/backend/            Legacy backend candidate manifests during migration
 releases/frontend/           Legacy frontend records during migration
+releases/deployments/        Environment-specific deployment receipts
 root/                        Cluster-specific root Applications
 ```
 
