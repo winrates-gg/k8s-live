@@ -21,3 +21,6 @@ backend:
     riotApiKeySsmPath: /wrgg/staging/seeded/control_plane/eso/runtime/riot/api_key
   config:
     ndLogLevel: "3"
+    matchArchiveRetentionDays: "90"
+    matchArchiveCleanupBatchSize: "500"
+    matchArchiveCleanupMaxRows: "5000"

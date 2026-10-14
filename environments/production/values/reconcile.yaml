@@ -16,6 +16,9 @@ archiveReconcileCronjobs:
   - name: match-archive-reconcile
     schedule: "30 6 * * 0"
     module: workers.match_archive_reconcile
+  - name: match-archive-cleanup
+    schedule: "0 */6 * * *"
+    module: workers.match_archive_cleanup
 
 analyticsCronjobs:
   - name: tier-cohort-win-rate
