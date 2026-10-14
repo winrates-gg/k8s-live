@@ -10,10 +10,13 @@ spec:
   generators:
     - matrix:
         generators:
-          # The environment overlay replaces this list with exactly one
-          # environment and its currently deployed release pointers.
-          - list:
-              elements: []
+          # The environment overlay replaces this generator path with exactly
+          # one environment and its currently deployed release pointer.
+          - git:
+              repoURL: https://github.com/winrates-gg/k8s-live.git
+              revision: main
+              files:
+                - path: releases/deployed/*.yaml
           - list:
               elements:
                 - component: bootstrap
@@ -47,9 +50,9 @@ spec:
             releaseName: "{{ .helmReleaseName }}"
             valueFiles:
               - "$values/environments/{{ .environment }}/values/{{ .component }}.yaml"
-              - "$values/releases/backend/{{ .backendReleaseId }}.yaml"
+              - "$values/releases/candidates/backend/{{ .backendCandidateId }}.yaml"
         - repoURL: https://github.com/winrates-gg/k8s-live.git
-          targetRevision: main
+          targetRevision: "{{ .k8sLiveRevision }}"
           ref: values
       destination:
         server: https://kubernetes.default.svc

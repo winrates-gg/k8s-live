@@ -64,7 +64,7 @@ def main() -> None:
     parser.add_argument("--artifact", required=True)
     parser.add_argument("--candidate-id", required=True)
     parser.add_argument("--source-revision", required=True)
-    parser.add_argument("--status", choices=("deployed", "failed", "not_deployed"), required=True)
+    parser.add_argument("--status", choices=("requested", "deployed", "failed", "not_deployed"), required=True)
     parser.add_argument("--artifact-status", choices=("published", "failed", "not_published"), required=True)
     parser.add_argument("--run-url", default="")
     args = parser.parse_args()

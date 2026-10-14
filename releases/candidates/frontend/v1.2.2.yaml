@@ -1,3 +1,9 @@
+candidate:
+  id: v1.2.2
+  artifact: frontend
+  validation_status: validated
+  artifact_status: published
+
 release:
   id: v1.2.2
   artifact: frontend

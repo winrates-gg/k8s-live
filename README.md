@@ -7,8 +7,9 @@ they use the same ApplicationSet and Helm chart templates.
 ## Deployment model
 
 This repository contains the desired Kubernetes configuration. It does not
-build application artifacts and it does not decide which source revision Argo
-should read.
+build application artifacts. It also contains the candidate records and
+environment pointers that tell Argo which immutable configuration revision to
+read.
 
 The target model is:
 
@@ -29,17 +30,26 @@ The revision pins belong in the Argo/bootstrap control layer outside the
 `k8s-live` revision they select. CI moves the staging pin first and moves the
 production pin after validation. Argo remains auto-synced in normal operation.
 
-Candidate metadata may live under an Argo-excluded CI path in this repository,
-but Argo must not use an ignored file as a substitute for an external revision
-selector. The current `releases/` files and `main`-tracking wiring are legacy
-implementation details to be migrated to this model.
+Candidate manifests and environment pointers are maintained in this
+repository:
+
+```text
+releases/candidates/backend/<candidate>.yaml
+releases/candidates/frontend/<candidate>.yaml
+releases/deployed/staging.yaml
+releases/deployed/production.yaml
+```
+
+CI commits the candidate first, captures that commit SHA, and then commits the
+environment pointer. The pointer's `k8sLiveRevision` is immutable, so Argo
+does not follow moving `main` content for the selected environment.
 
 Deployment receipts are recorded separately under
-`releases/deployments/<environment>/<artifact>/`. A receipt is written only
-after the CI operation succeeds and includes the candidate ID, source revision,
-artifact status, deployment status, and a `deployed: true` or `false` value.
-Receipts are environment-specific so staging and production history cannot be
-confused.
+`releases/deployments/<environment>/<artifact>/`. They include the candidate
+ID, source revision, artifact status, deployment status, and a `deployed: true`
+or `false` value. Kubernetes pointer updates use `status: requested` until a
+health-aware process confirms Argo has rolled out successfully. Receipts are
+environment-specific so staging and production history cannot be confused.
 
 The backend API and worker image repositories should be defined once per
 environment and consumed by both runtime and reconcile charts. The selected
@@ -52,8 +62,8 @@ apps/base/                  Shared Argo ApplicationSet
 apps/overlays/staging/      Staging Argo entry point
 apps/overlays/production/   Production Argo entry point
 environments/<env>/values/  Environment-specific Helm values
-releases/backend/            Legacy backend candidate manifests during migration
-releases/frontend/           Legacy frontend records during migration
+releases/candidates/         CI-generated backend and frontend candidates
+releases/deployed/           Environment pointers consumed by Argo
 releases/deployments/        Environment-specific deployment receipts
 root/                        Cluster-specific root Applications
 ```

@@ -10,9 +10,5 @@ patches:
       name: wrgg-environment-apps
     patch: |-
       - op: replace
-        path: /spec/generators/0/matrix/generators/0/list/elements
-        value:
-          - environment: staging
-            backendReleaseId: v1.2.2
-            frontendReleaseId: v1.2.2
-            chartRevision: 4189e43d59fbb6cad9239ee2bc3f4f18c89cb6da
+        path: /spec/generators/0/matrix/generators/0/git/files/0/path
+        value: releases/deployed/staging.yaml
