@@ -21,14 +21,15 @@ backend candidate
   -> Argo reconciliation
 ```
 
-Staging and production must not both track `main`. Each environment should be
-independently pinned to an immutable `k8s-live` commit so shared ApplicationSet
-logic, base manifests, Helm wiring, and values can be tested in staging while
-production remains stable.
+The generated environment Applications do not track `main`. Each environment
+is independently pinned to an immutable `k8s-live` commit so shared
+ApplicationSet logic, base manifests, Helm wiring, and values can be tested in
+staging while production remains stable. The small root Application may track
+`main` to load the pointer-aware ApplicationSet itself.
 
-The revision pins belong in the Argo/bootstrap control layer outside the
-`k8s-live` revision they select. CI moves the staging pin first and moves the
-production pin after validation. Argo remains auto-synced in normal operation.
+The environment pointers live in this repository. CI moves the staging
+pointer first and moves the production pointer after validation. Argo remains
+auto-synced in normal operation.
 
 Candidate manifests and environment pointers are maintained in this
 repository:
