@@ -7,14 +7,15 @@ they use the same ApplicationSet and Helm chart templates.
 ## Deployment model
 
 This repository contains the desired Kubernetes configuration. It does not
-build application artifacts. It also contains the candidate records and
-environment pointers that tell Argo which immutable configuration revision to
-read.
+build application artifacts and it does not own backend or frontend candidate
+records. It owns cluster candidates that resolve the selected app candidates
+into one immutable Kubernetes desired-state revision.
 
 The target model is:
 
 ```text
-backend candidate
+backend/frontend candidates
+  -> cluster candidate
   -> k8s-live configuration commit
   -> staging revision pin
   -> production revision pin
@@ -35,22 +36,24 @@ Candidate manifests and environment pointers are maintained in this
 repository:
 
 ```text
-releases/candidates/backend/<candidate>.yaml
-releases/candidates/frontend/<candidate>.yaml
-releases/deployed/staging.yaml
-releases/deployed/production.yaml
+releases/candidates/cluster-vX.Y.Z.yaml
+releases/current/staging.yaml
+releases/current/production.yaml
 ```
 
-CI commits the candidate first, captures that commit SHA, and then commits the
-environment pointer. The pointer's `k8sLiveRevision` is immutable, so Argo
-does not follow moving `main` content for the selected environment.
+The backend and frontend repositories own their own candidate records and
+artifact promotion. The cluster workflow verifies those records, writes a
+cluster candidate containing their IDs and resolved image values, captures its
+commit SHA, and then commits the environment pointer. The pointer's
+`k8sLiveRevision` is immutable, so Argo does not follow moving `main` content
+for the selected environment.
 
-Deployment receipts are recorded separately under
-`releases/deployments/<environment>/<artifact>/`. They include the candidate
-ID, source revision, artifact status, deployment status, and a `deployed: true`
-or `false` value. Kubernetes pointer updates use `status: requested` until a
-health-aware process confirms Argo has rolled out successfully. Receipts are
-environment-specific so staging and production history cannot be confused.
+The current pointer is the requested state. Argo health and Kubernetes state
+answer what actually rolled out; Git history preserves previous pointers for
+rollback.
+
+Before the first cluster candidate exists, the environment pointer file is
+absent and the ApplicationSet intentionally creates no runtime Applications.
 
 The backend API and worker image repositories should be defined once per
 environment and consumed by both runtime and reconcile charts. The selected
@@ -63,9 +66,8 @@ apps/base/                  Shared Argo ApplicationSet
 apps/overlays/staging/      Staging Argo entry point
 apps/overlays/production/   Production Argo entry point
 environments/<env>/values/  Environment-specific Helm values
-releases/candidates/         CI-generated backend and frontend candidates
-releases/deployed/           Environment pointers consumed by Argo
-releases/deployments/        Environment-specific deployment receipts
+releases/candidates/         CI-generated cluster candidates
+releases/current/            Environment pointers consumed by Argo
 root/                        Cluster-specific root Applications
 ```
 

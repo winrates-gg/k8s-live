@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and update the environment deployment pointers used by Argo."""
+"""Read and update the environment current pointers used by Argo."""
 
 from __future__ import annotations
 
@@ -11,8 +11,7 @@ from pathlib import Path
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 SHA = re.compile(r"^[0-9a-f]{40}$")
 ARTIFACT_KEYS = {
-    "backend": "backendCandidateId",
-    "frontend": "frontendCandidateId",
+    "cluster": "clusterCandidateId",
 }
 
 
@@ -23,7 +22,7 @@ def _validate(value: str, label: str, pattern: re.Pattern[str] = SAFE_ID) -> str
 
 
 def pointer_path(root: Path, environment: str) -> Path:
-    return root / "releases" / "deployed" / f"{_validate(environment, 'environment')}.yaml"
+    return root / "releases" / "current" / f"{_validate(environment, 'environment')}.yaml"
 
 
 def _set_value(lines: list[str], key: str, value: str) -> list[str]:

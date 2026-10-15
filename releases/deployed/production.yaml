@@ -1,5 +1,0 @@
-environment: production
-k8sLiveRevision: 5ae22654c99fe12cb3327574955fe96e754af8ad
-backendCandidateId: v1.2.2
-frontendCandidateId: v1.2.2
-chartRevision: 4189e43d59fbb6cad9239ee2bc3f4f18c89cb6da
