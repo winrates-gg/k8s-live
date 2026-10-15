@@ -75,11 +75,11 @@ jobs:
         if: ${{ always() }}
         env:
           CANDIDATE_ID: ${{ steps.candidate.outputs.candidate_id }}
-          VALIDATION_FAILED: ${{ failure() }}
+          VALIDATION_RESULT: ${{ job.status }}
         run: |
           test -n "$CANDIDATE_ID" || exit 1
           status=validated
-          [[ "$VALIDATION_FAILED" == "true" ]] && status=failed
+          [[ "$VALIDATION_RESULT" != "success" ]] && status=failed
           python3 ci/release_ledger.py update --candidate-id "$CANDIDATE_ID" --status "$status"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
