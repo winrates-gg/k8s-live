@@ -1,0 +1,78 @@
+name: "[AUTO] Validate Cluster Candidate"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      candidate_id:
+        description: "Optional cluster candidate to retry, for example cluster-v0.0.1"
+        required: false
+        type: string
+
+concurrency:
+  group: cluster-release-ledger
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: ${{ github.actor != 'github-actions[bot]' || inputs.candidate_id != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve candidate source revision
+        id: candidate
+        env:
+          REQUESTED_CANDIDATE_ID: ${{ inputs.candidate_id }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          candidate_id="$REQUESTED_CANDIDATE_ID"
+          if [[ -z "$candidate_id" ]]; then
+            for attempt in {1..24}; do
+              git fetch origin main
+              git reset --hard origin/main
+              candidate_id="$(python3 ci/release_ledger.py find --source-sha "$SOURCE_SHA" 2>/dev/null || true)"
+              [[ -n "$candidate_id" ]] && break
+              sleep 5
+            done
+          fi
+          [[ "$candidate_id" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          grep -Eq '^  status: (not_validated|failed)$' "ci/releases/candidates/${candidate_id}.yaml"
+          source_sha="$(python3 ci/release_ledger.py resolve --candidate-id "$candidate_id")"
+          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.candidate.outputs.source_sha }}
+          path: source
+
+      - name: Validate staging and production overlays
+        working-directory: source
+        run: |
+          kubectl kustomize apps/overlays/staging >/dev/null
+          kubectl kustomize apps/overlays/production >/dev/null
+
+      - name: Mark candidate validation result
+        if: ${{ always() }}
+        env:
+          CANDIDATE_ID: ${{ steps.candidate.outputs.candidate_id }}
+          VALIDATION_FAILED: ${{ failure() }}
+        run: |
+          test -n "$CANDIDATE_ID" || exit 1
+          status=validated
+          [[ "$VALIDATION_FAILED" == "true" ]] && status=failed
+          python3 ci/release_ledger.py update --candidate-id "$CANDIDATE_ID" --status "$status"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "ci/releases/candidates/${CANDIDATE_ID}.yaml"
+          git diff --cached --quiet || {
+            git commit -m "chore(candidate): ${status} ${CANDIDATE_ID} [skip ci]"
+            git push origin HEAD:main
+          }
+          [[ "$status" == "validated" ]]

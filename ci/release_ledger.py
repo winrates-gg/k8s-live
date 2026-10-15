@@ -83,6 +83,14 @@ def resolve(args: argparse.Namespace) -> None:
     print(sha)
 
 
+def find(args: argparse.Namespace) -> None:
+    for path in sorted(CANDIDATES.glob("cluster-v*.yaml")):
+        if source_sha(path) == args.source_sha:
+            print(path.stem)
+            return
+    raise SystemExit(f"no cluster candidate exists for source SHA: {args.source_sha}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -94,11 +102,15 @@ def main() -> None:
     update_parser.add_argument("--metadata")
     resolve_parser = subparsers.add_parser("resolve")
     resolve_parser.add_argument("--candidate-id", required=True)
+    find_parser = subparsers.add_parser("find")
+    find_parser.add_argument("--source-sha", required=True)
     args = parser.parse_args()
     if args.command == "record":
         record(args)
     elif args.command == "update":
         update(args)
+    elif args.command == "find":
+        find(args)
     else:
         resolve(args)
 

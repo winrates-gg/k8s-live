@@ -10,9 +10,10 @@ identity for a resolved cluster configuration.
 - `current/<environment>.yaml` records the environment's selected cluster
   candidate and immutable `k8sLiveRevision`.
 
-Every merge to `main` creates a `not_validated` cluster candidate. Staging
-selects that candidate plus built application candidates and a validated Helm
-candidate. Production promotion reads the chart revision from the tested
+Every merge to `main` creates a `not_validated` cluster candidate. Automatic
+overlay validation marks it `validated` or `failed`. Staging selects that
+candidate plus built application candidates and a validated Helm candidate.
+Production promotion reads the chart revision from the tested
 staging pointer; no deployment depends on a moving chart branch.
 
 Backend and frontend candidate records remain authoritative in their own

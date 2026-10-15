@@ -107,8 +107,16 @@ jobs:
             echo "Backend candidate is not published: ${{ inputs.backend_candidate_id }}" >&2
             exit 1
           }
+          grep -q "^  status: validated$" "${backend_file}" || {
+            echo "Backend candidate did not pass source validation: ${{ inputs.backend_candidate_id }}" >&2
+            exit 1
+          }
           grep -q "artifact_status: published" "${frontend_file}" || {
             echo "Frontend candidate is not published: ${{ inputs.frontend_candidate_id }}" >&2
+            exit 1
+          }
+          grep -q "^  status: validated$" "${frontend_file}" || {
+            echo "Frontend candidate did not pass source validation: ${{ inputs.frontend_candidate_id }}" >&2
             exit 1
           }
           grep -q "^  status: validated$" "${chart_file}" || {
@@ -129,10 +137,14 @@ jobs:
             echo "Missing cluster candidate: ${{ inputs.cluster_version }}" >&2
             exit 1
           }
-          grep -q "^  status: not_validated$" "${candidate_path}" || {
-            echo "Cluster candidate is already configured: ${{ inputs.cluster_version }}" >&2
+          grep -q "^  status: validated$" "${candidate_path}" || {
+            echo "Cluster candidate did not pass source validation: ${{ inputs.cluster_version }}" >&2
             exit 1
           }
+          if grep -q '^  backend_candidate_id:' "${candidate_path}"; then
+            echo "Cluster candidate is already configured: ${{ inputs.cluster_version }}" >&2
+            exit 1
+          fi
           chart_revision="$(python3 helm/ci/release_ledger.py resolve --candidate-id "${{ inputs.chart_candidate_id }}")"
           cat > "$RUNNER_TEMP/cluster.json" <<EOF
           {
