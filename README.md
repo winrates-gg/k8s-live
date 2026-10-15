@@ -36,9 +36,9 @@ Candidate manifests and environment pointers are maintained in this
 repository:
 
 ```text
-releases/candidates/cluster-vX.Y.Z.yaml
-releases/current/staging.yaml
-releases/current/production.yaml
+ci/releases/candidates/cluster-v0.0.N.yaml
+ci/releases/current/staging.yaml
+ci/releases/current/production.yaml
 ```
 
 The backend and frontend repositories own their own candidate records and
@@ -66,8 +66,9 @@ apps/base/                  Shared Argo ApplicationSet
 apps/overlays/staging/      Staging Argo entry point
 apps/overlays/production/   Production Argo entry point
 environments/<env>/values/  Environment-specific Helm values
-releases/candidates/         CI-generated cluster candidates
-releases/current/            Environment pointers consumed by Argo
+ci/                          CI helpers and CI-owned state
+ci/releases/candidates/      CI-generated cluster candidates
+ci/releases/current/         Environment pointers consumed by Argo
 root/                        Cluster-specific root Applications
 ```
 

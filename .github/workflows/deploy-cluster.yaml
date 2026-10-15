@@ -11,19 +11,19 @@ on:
           - stage
           - promote
       cluster_version:
-        description: "Cluster candidate ID, for example cluster-v1.0.0"
+        description: "Recorded cluster candidate, for example cluster-v0.0.1"
         required: true
         type: string
       backend_candidate_id:
-        description: "Backend candidate ID when staging, for example backend-v1.0.0"
+        description: "Backend candidate ID when staging, for example backend-v0.0.1"
         required: false
         type: string
       frontend_candidate_id:
-        description: "Frontend candidate ID when staging, for example frontend-v1.0.0"
+        description: "Frontend candidate ID when staging, for example frontend-v0.0.1"
         required: false
         type: string
-      chart_revision:
-        description: "Full Helm chart repository SHA when staging"
+      chart_candidate_id:
+        description: "Validated Helm candidate, for example chart-v0.0.1"
         required: false
         type: string
 
@@ -49,10 +49,7 @@ jobs:
           if [[ "${{ inputs.operation }}" == "stage" ]]; then
             [[ "${{ inputs.backend_candidate_id }}" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
             [[ "${{ inputs.frontend_candidate_id }}" =~ ^frontend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-            [[ "${{ inputs.chart_revision }}" =~ ^[0-9a-f]{40}$ ]] || {
-              echo "chart_revision must be a full Helm chart repository SHA when staging" >&2
-              exit 1
-            }
+            [[ "${{ inputs.chart_candidate_id }}" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
           fi
 
       - name: Create GitHub App token for release ledgers
@@ -62,7 +59,7 @@ jobs:
           client-id: ${{ vars.WRGG_GITOPS_WRITE_APP_ID }}
           private-key: ${{ secrets.WRGG_GITOPS_WRITE_APP_PRIVATE_KEY }}
           owner: winrates-gg
-          repositories: backend,frontend,k8s-live
+          repositories: backend,frontend,k8s-live,k8s-helm-charts
 
       - name: Check out cluster ledger
         uses: actions/checkout@v4
@@ -85,13 +82,27 @@ jobs:
           token: ${{ steps.app_token.outputs.token }}
           path: frontend
 
+      - name: Check out Helm chart ledger
+        uses: actions/checkout@v4
+        with:
+          repository: winrates-gg/k8s-helm-charts
+          ref: main
+          token: ${{ steps.app_token.outputs.token }}
+          path: helm
+
       - name: Create staging cluster candidate
         if: ${{ inputs.operation == 'stage' }}
         run: |
-          backend_file="backend/releases/candidates/${{ inputs.backend_candidate_id }}.yaml"
-          frontend_file="frontend/releases/candidates/${{ inputs.frontend_candidate_id }}.yaml"
+          [[ "${{ inputs.cluster_version }}" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "${{ inputs.backend_candidate_id }}" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "${{ inputs.frontend_candidate_id }}" =~ ^frontend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "${{ inputs.chart_candidate_id }}" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          backend_file="backend/ci/releases/candidates/${{ inputs.backend_candidate_id }}.yaml"
+          frontend_file="frontend/ci/releases/candidates/${{ inputs.frontend_candidate_id }}.yaml"
+          chart_file="helm/ci/releases/candidates/${{ inputs.chart_candidate_id }}.yaml"
           test -f "${backend_file}" || { echo "Missing ${backend_file}" >&2; exit 1; }
           test -f "${frontend_file}" || { echo "Missing ${frontend_file}" >&2; exit 1; }
+          test -f "${chart_file}" || { echo "Missing ${chart_file}" >&2; exit 1; }
           grep -q "artifact_status: published" "${backend_file}" || {
             echo "Backend candidate is not published: ${{ inputs.backend_candidate_id }}" >&2
             exit 1
@@ -100,35 +111,42 @@ jobs:
             echo "Frontend candidate is not published: ${{ inputs.frontend_candidate_id }}" >&2
             exit 1
           }
-          grep -q "^candidate_id: ${{ inputs.frontend_candidate_id }}$" frontend/releases/current/staging.yaml || {
+          grep -q "^  status: validated$" "${chart_file}" || {
+            echo "Helm candidate is not validated: ${{ inputs.chart_candidate_id }}" >&2
+            exit 1
+          }
+          grep -q "^candidate_id: ${{ inputs.backend_candidate_id }}$" backend/ci/releases/current/staging.yaml || {
+            echo "Backend candidate is not active in staging; run activate-staging.yaml first" >&2
+            exit 1
+          }
+          grep -q "^candidate_id: ${{ inputs.frontend_candidate_id }}$" frontend/ci/releases/current/staging.yaml || {
             echo "Frontend candidate is not active in staging; run activate-staging.yaml first" >&2
             exit 1
           }
 
-          candidate_path="releases/candidates/${{ inputs.cluster_version }}.yaml"
-          test ! -e "${candidate_path}" || {
-            echo "Cluster candidate already exists: ${{ inputs.cluster_version }}" >&2
+          candidate_path="ci/releases/candidates/${{ inputs.cluster_version }}.yaml"
+          test -f "${candidate_path}" || {
+            echo "Missing cluster candidate: ${{ inputs.cluster_version }}" >&2
             exit 1
           }
-          mkdir -p "$(dirname "${candidate_path}")"
-          cat > "${candidate_path}" <<EOF
-          candidate:
-            id: ${{ inputs.cluster_version }}
-            domain: cluster
-            validation_status: validated
-            source:
-              repository: winrates-gg/k8s-live
-              sha: ${{ github.sha }}
-            chart_revision: ${{ inputs.chart_revision }}
-            backend_candidate_id: ${{ inputs.backend_candidate_id }}
-            frontend_candidate_id: ${{ inputs.frontend_candidate_id }}
-
-          backend:
-            apiImage:
-              tag: ${{ inputs.backend_candidate_id }}
-            workerImage:
-              tag: ${{ inputs.backend_candidate_id }}
+          grep -q "^  status: not_validated$" "${candidate_path}" || {
+            echo "Cluster candidate is already configured: ${{ inputs.cluster_version }}" >&2
+            exit 1
+          }
+          chart_revision="$(python3 helm/ci/release_ledger.py resolve --candidate-id "${{ inputs.chart_candidate_id }}")"
+          cat > "$RUNNER_TEMP/cluster.json" <<EOF
+          {
+            "backend_candidate_id": "${{ inputs.backend_candidate_id }}",
+            "frontend_candidate_id": "${{ inputs.frontend_candidate_id }}",
+            "chart_candidate_id": "${{ inputs.chart_candidate_id }}",
+            "chart_revision": "${chart_revision}",
+            "backend": {
+              "apiImage": {"tag": "${{ inputs.backend_candidate_id }}"},
+              "workerImage": {"tag": "${{ inputs.backend_candidate_id }}"}
+            }
+          }
           EOF
+          python3 ci/release_ledger.py update --candidate-id "${{ inputs.cluster_version }}" --status validated --metadata "$RUNNER_TEMP/cluster.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "${candidate_path}"
@@ -138,38 +156,39 @@ jobs:
       - name: Request staging cluster deployment
         if: ${{ inputs.operation == 'stage' }}
         run: |
+          chart_revision="$(grep '^  chart_revision:' "ci/releases/candidates/${{ inputs.cluster_version }}.yaml" | awk '{print $2}')"
           k8s_live_revision="$(git rev-parse HEAD)"
-          python3 scripts/deployment_pointer.py update \
+          python3 ci/deployment_pointer.py update \
             --environment staging \
             --artifact cluster \
             --candidate-id "${{ inputs.cluster_version }}" \
             --k8s-live-revision "${k8s_live_revision}" \
-            --chart-revision "${{ inputs.chart_revision }}"
-          git add releases/current
+            --chart-revision "${chart_revision}"
+          git add ci/releases/current
           git commit -m "chore(staging): request ${{ inputs.cluster_version }}"
           git push origin HEAD:main
 
       - name: Validate staging pointer before promotion
         if: ${{ inputs.operation == 'promote' }}
         run: |
-          staging_candidate="$(python3 scripts/deployment_pointer.py get --environment staging --key clusterCandidateId)"
+          staging_candidate="$(python3 ci/deployment_pointer.py get --environment staging --key clusterCandidateId)"
           test "${staging_candidate}" = "${{ inputs.cluster_version }}" || {
             echo "Production can only promote the cluster candidate currently selected by staging" >&2
             exit 1
           }
-          test -f "releases/candidates/${{ inputs.cluster_version }}.yaml" || {
+          test -f "ci/releases/candidates/${{ inputs.cluster_version }}.yaml" || {
             echo "Missing cluster candidate: ${{ inputs.cluster_version }}" >&2
             exit 1
           }
-          cluster_backend_candidate="$(grep -E '^[[:space:]]+backend_candidate_id:' "releases/candidates/${{ inputs.cluster_version }}.yaml" | awk '{print $2; exit}')"
-          cluster_frontend_candidate="$(grep -E '^[[:space:]]+frontend_candidate_id:' "releases/candidates/${{ inputs.cluster_version }}.yaml" | awk '{print $2; exit}')"
-          test -f "backend/releases/current/production.yaml" || exit 1
-          test -f "frontend/releases/current/production.yaml" || exit 1
-          grep -q "^candidate_id: ${cluster_backend_candidate}$" backend/releases/current/production.yaml || {
+          cluster_backend_candidate="$(grep -E '^[[:space:]]+backend_candidate_id:' "ci/releases/candidates/${{ inputs.cluster_version }}.yaml" | awk '{print $2; exit}')"
+          cluster_frontend_candidate="$(grep -E '^[[:space:]]+frontend_candidate_id:' "ci/releases/candidates/${{ inputs.cluster_version }}.yaml" | awk '{print $2; exit}')"
+          test -f "backend/ci/releases/current/production.yaml" || exit 1
+          test -f "frontend/ci/releases/current/production.yaml" || exit 1
+          grep -q "^candidate_id: ${cluster_backend_candidate}$" backend/ci/releases/current/production.yaml || {
             echo "Backend candidate is not current in production: ${cluster_backend_candidate}" >&2
             exit 1
           }
-          grep -q "^candidate_id: ${cluster_frontend_candidate}$" frontend/releases/current/production.yaml || {
+          grep -q "^candidate_id: ${cluster_frontend_candidate}$" frontend/ci/releases/current/production.yaml || {
             echo "Frontend candidate is not current in production: ${cluster_frontend_candidate}" >&2
             exit 1
           }
@@ -177,14 +196,14 @@ jobs:
       - name: Promote cluster deployment pointer
         if: ${{ inputs.operation == 'promote' }}
         run: |
-          k8s_live_revision="$(python3 scripts/deployment_pointer.py get --environment staging --key k8sLiveRevision)"
-          chart_revision="$(python3 scripts/deployment_pointer.py get --environment staging --key chartRevision)"
-          python3 scripts/deployment_pointer.py update \
+          k8s_live_revision="$(python3 ci/deployment_pointer.py get --environment staging --key k8sLiveRevision)"
+          chart_revision="$(python3 ci/deployment_pointer.py get --environment staging --key chartRevision)"
+          python3 ci/deployment_pointer.py update \
             --environment production \
             --artifact cluster \
             --candidate-id "${{ inputs.cluster_version }}" \
             --k8s-live-revision "${k8s_live_revision}" \
             --chart-revision "${chart_revision}"
-          git add releases/current
+          git add ci/releases/current
           git commit -m "chore(production): request ${{ inputs.cluster_version }}"
           git push origin HEAD:main

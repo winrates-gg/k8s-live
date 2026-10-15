@@ -22,7 +22,7 @@ def _validate(value: str, label: str, pattern: re.Pattern[str] = SAFE_ID) -> str
 
 
 def pointer_path(root: Path, environment: str) -> Path:
-    return root / "releases" / "current" / f"{_validate(environment, 'environment')}.yaml"
+    return root / "ci" / "releases" / "current" / f"{_validate(environment, 'environment')}.yaml"
 
 
 def _set_value(lines: list[str], key: str, value: str) -> list[str]:

@@ -1,0 +1,43 @@
+name: "[AUTO] Record Cluster Candidate"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: "Optional full SHA; defaults to the current main revision"
+        required: false
+        type: string
+
+concurrency:
+  group: cluster-release-ledger
+  cancel-in-progress: false
+
+jobs:
+  record:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record merged configuration revision
+        id: candidate
+        run: |
+          candidate_id="$(python3 ci/release_ledger.py record --source-sha "${{ inputs.source_sha || github.sha }}")"
+          echo "candidate_id=${candidate_id}" >> "$GITHUB_OUTPUT"
+      - name: Commit candidate record
+        run: |
+          git fetch origin main
+          git rebase origin/main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ci/releases/candidates
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore(candidate): record ${{ steps.candidate.outputs.candidate_id }} [skip ci]"
+          git push origin HEAD:main

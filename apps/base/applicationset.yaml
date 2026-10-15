@@ -16,7 +16,7 @@ spec:
               repoURL: https://github.com/winrates-gg/k8s-live.git
               revision: main
               files:
-                - path: releases/current/*.yaml
+                - path: ci/releases/current/*.yaml
           - list:
               elements:
                 - component: bootstrap
@@ -50,7 +50,7 @@ spec:
             releaseName: "{{ .helmReleaseName }}"
             valueFiles:
               - "$values/environments/{{ .environment }}/values/{{ .component }}.yaml"
-              - "$values/releases/candidates/{{ .clusterCandidateId }}.yaml"
+              - "$values/ci/releases/candidates/{{ .clusterCandidateId }}.yaml"
         - repoURL: https://github.com/winrates-gg/k8s-live.git
           targetRevision: "{{ .k8sLiveRevision }}"
           ref: values
