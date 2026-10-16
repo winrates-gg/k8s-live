@@ -11,12 +11,12 @@ spec:
     - matrix:
         generators:
           # The environment overlay replaces this generator path with exactly
-          # one environment and its currently deployed release pointer.
+          # one environment and its deployed release pointer.
           - git:
               repoURL: https://github.com/winrates-gg/k8s-live.git
               revision: main
               files:
-                - path: ci/releases/current/*.yaml
+                - path: deployments/*.yaml
           - list:
               elements:
                 - component: bootstrap
@@ -44,15 +44,15 @@ spec:
       project: default
       sources:
         - repoURL: https://github.com/winrates-gg/k8s-helm-charts.git
-          targetRevision: "{{ .chartRevision }}"
+          targetRevision: "{{ .chartRelease }}"
           path: "{{ .chartPath }}"
           helm:
             releaseName: "{{ .helmReleaseName }}"
             valueFiles:
               - "$values/environments/{{ .environment }}/values/{{ .component }}.yaml"
-              - "$values/ci/releases/candidates/{{ .clusterCandidateId }}.yaml"
+              - "$values/deployments/{{ .environment }}.yaml"
         - repoURL: https://github.com/winrates-gg/k8s-live.git
-          targetRevision: "{{ .k8sLiveRevision }}"
+          targetRevision: "{{ .k8sLiveRelease }}"
           ref: values
       destination:
         server: https://kubernetes.default.svc

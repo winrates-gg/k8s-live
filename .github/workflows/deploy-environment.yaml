@@ -1,0 +1,161 @@
+name: "[MNL] Deploy Kubernetes environment"
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "Deploy selected application releases or roll back to an existing cluster release"
+        required: true
+        type: choice
+        options:
+          - deploy
+          - rollback
+        default: deploy
+      environment:
+        description: "Kubernetes environment to update"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+      backend_release:
+        description: "Backend GitHub Release tag for deploy"
+        required: false
+        type: string
+      frontend_release:
+        description: "Frontend GitHub Release tag for deploy"
+        required: false
+        type: string
+      chart_release:
+        description: "Helm chart GitHub Release tag for deploy"
+        required: false
+        type: string
+      cluster_release:
+        description: "Existing cluster release tag for rollback"
+        required: false
+        type: string
+
+concurrency:
+  group: k8s-live-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  deploy:
+    name: ${{ inputs.operation }} ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out k8s-live main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create read token for release validation
+        id: read_token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.WRGG_GITOPS_READ_APP_ID }}
+          private-key: ${{ secrets.WRGG_GITOPS_READ_APP_PRIVATE_KEY }}
+          owner: winrates-gg
+          repositories: backend,frontend,k8s-helm-charts,k8s-live
+
+      - name: Validate release inputs
+        if: ${{ inputs.operation == 'deploy' }}
+        env:
+          GH_TOKEN: ${{ steps.read_token.outputs.token }}
+          BACKEND_RELEASE: ${{ inputs.backend_release }}
+          FRONTEND_RELEASE: ${{ inputs.frontend_release }}
+          CHART_RELEASE: ${{ inputs.chart_release }}
+        run: |
+          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "$FRONTEND_RELEASE" =~ ^frontend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          gh release view "$BACKEND_RELEASE" --repo winrates-gg/backend >/dev/null
+          gh release view "$FRONTEND_RELEASE" --repo winrates-gg/frontend >/dev/null
+          gh release view "$CHART_RELEASE" --repo winrates-gg/k8s-helm-charts >/dev/null
+
+      - name: Validate current k8s-live source
+        if: ${{ inputs.operation == 'deploy' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          successful_runs="$(gh run list --repo winrates-gg/k8s-live --workflow validate.yaml --commit "$GITHUB_SHA" --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')"
+          [[ "$successful_runs" -gt 0 ]] || {
+            echo "The current k8s-live commit has no successful validation run." >&2
+            exit 1
+          }
+
+      - name: Validate rollback release
+        if: ${{ inputs.operation == 'rollback' }}
+        env:
+          GH_TOKEN: ${{ steps.read_token.outputs.token }}
+          CLUSTER_RELEASE: ${{ inputs.cluster_release }}
+        run: |
+          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          gh release view "$CLUSTER_RELEASE" --repo winrates-gg/k8s-live >/dev/null
+          git cat-file -e "${CLUSTER_RELEASE}:deployments/${{ inputs.environment }}.yaml"
+
+      - name: Create deployment state
+        id: state
+        env:
+          OPERATION: ${{ inputs.operation }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          BACKEND_RELEASE: ${{ inputs.backend_release }}
+          FRONTEND_RELEASE: ${{ inputs.frontend_release }}
+          CHART_RELEASE: ${{ inputs.chart_release }}
+          CLUSTER_RELEASE: ${{ inputs.cluster_release }}
+        run: |
+          mkdir -p deployments
+          if [[ "$OPERATION" == "rollback" ]]; then
+            git show "${CLUSTER_RELEASE}:deployments/${ENVIRONMENT}.yaml" > "deployments/${ENVIRONMENT}.yaml"
+            echo "cluster_release=${CLUSTER_RELEASE}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          latest_number="$(git tag --list 'cluster-v0.0.*' | sed -E 's/^cluster-v0\.0\.//' | sort -n | tail -1)"
+          latest_number="${latest_number:-0}"
+          next_release="cluster-v0.0.$((latest_number + 1))"
+          cat > "deployments/${ENVIRONMENT}.yaml" <<EOF
+          environment: ${ENVIRONMENT}
+          k8sLiveRelease: ${next_release}
+          backendRelease: ${BACKEND_RELEASE}
+          frontendRelease: ${FRONTEND_RELEASE}
+          chartRelease: ${CHART_RELEASE}
+          backend:
+            apiImage:
+              tag: ${BACKEND_RELEASE}
+            workerImage:
+              tag: ${BACKEND_RELEASE}
+          EOF
+          echo "cluster_release=${next_release}" >> "$GITHUB_OUTPUT"
+
+      - name: Commit and publish deployment state
+        env:
+          OPERATION: ${{ inputs.operation }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          CLUSTER_RELEASE: ${{ steps.state.outputs.cluster_release }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "deployments/${ENVIRONMENT}.yaml"
+          git diff --cached --quiet && {
+            echo "Deployment state is already current."
+            exit 0
+          }
+          git commit -m "deploy(${ENVIRONMENT}): ${CLUSTER_RELEASE}"
+          if [[ "$OPERATION" == "deploy" ]]; then
+            git push origin HEAD:main "refs/tags/${CLUSTER_RELEASE}"
+            gh release create "$CLUSTER_RELEASE" \
+              --target "$CLUSTER_RELEASE" \
+              --title "$CLUSTER_RELEASE" \
+              --generate-notes \
+              --notes "Kubernetes desired state for ${ENVIRONMENT}."
+          else
+            git push origin HEAD:main
+          fi

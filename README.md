@@ -14,39 +14,33 @@ into one immutable Kubernetes desired-state revision.
 The target model is:
 
 ```text
-backend/frontend candidates
-  -> cluster candidate
-  -> k8s-live configuration commit
-  -> staging revision pin
-  -> production revision pin
+backend/frontend/chart releases
+  -> cluster GitHub Release and tag
+  -> environment deployment file
   -> Argo reconciliation
 ```
 
-The generated environment Applications do not track `main`. Each environment
-is independently pinned to an immutable `k8s-live` commit so shared
-ApplicationSet logic, base manifests, Helm wiring, and values can be tested in
-staging while production remains stable. The small root Application may track
-`main` to load the pointer-aware ApplicationSet itself.
+The generated environment Applications select an immutable Helm release and
+an immutable `k8s-live` cluster release. The small root Application tracks
+`main` only to load the pointer-aware ApplicationSet; the selected runtime
+configuration and chart are still release-pinned.
 
 The environment pointers live in this repository. CI moves the staging
 pointer first and moves the production pointer after validation. Argo remains
 auto-synced in normal operation.
 
-Candidate manifests and environment pointers are maintained in this
-repository:
+Environment deployment state is maintained in this repository:
 
 ```text
-ci/releases/candidates/cluster-v0.0.N.yaml
-ci/releases/current/staging.yaml
-ci/releases/current/production.yaml
+deployments/staging.yaml
+deployments/production.yaml
 ```
 
-The backend and frontend repositories own their own candidate records and
-artifact promotion. The cluster workflow verifies those records, writes a
-cluster candidate containing their IDs and resolved image values, captures its
-commit SHA, and then commits the environment pointer. The pointer's
-`k8sLiveRevision` is immutable, so Argo does not follow moving `main` content
-for the selected environment.
+The cluster workflow verifies the selected backend, frontend, and Helm
+GitHub Releases, writes the environment deployment file, and publishes a
+`cluster-v0.0.N` GitHub Release and tag. The deployment file selects the
+immutable cluster and application releases. Rollback selects an existing
+cluster release and copies its environment state forward.
 
 The environment runtime values own the optional deployment scope. For the
 current NA beta they contain
@@ -75,9 +69,7 @@ apps/base/                  Shared Argo ApplicationSet
 apps/overlays/staging/      Staging Argo entry point
 apps/overlays/production/   Production Argo entry point
 environments/<env>/values/  Environment-specific Helm values
-ci/                          CI helpers and CI-owned state
-ci/releases/candidates/      CI-generated cluster candidates
-ci/releases/current/         Environment pointers consumed by Argo
+deployments/                 Environment release selections
 root/                        Cluster-specific root Applications
 ```
 

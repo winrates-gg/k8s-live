@@ -1,0 +1,34 @@
+name: "[AUTO] Validate Kubernetes live configuration"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: k8s-live-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Argo overlays and release references
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render staging overlay
+        run: kubectl kustomize apps/overlays/staging >/dev/null
+
+      - name: Render production overlay
+        run: kubectl kustomize apps/overlays/production >/dev/null
+
+      - name: Reject retired ledger paths
+        run: |
+          if git grep -n -E 'ci/releases|release_ledger|deployment_pointer|candidate_id|chartRevision|k8sLiveRevision' -- ':!operations' ':!.git'; then
+            echo "Retired candidate-ledger wiring remains in k8s-live." >&2
+            exit 1
+          fi

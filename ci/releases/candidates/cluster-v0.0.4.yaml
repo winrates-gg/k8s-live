@@ -1,8 +1,0 @@
-candidate:
-  id: cluster-v0.0.4
-  domain: cluster
-  status: validated
-  source:
-    repository: winrates-gg/k8s-live
-    sha: f8d1c504275dbbeb3b82b9e0a4a96d987f8f185d
-  created_at: 2026-10-15T22:57:35Z
