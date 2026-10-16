@@ -69,7 +69,9 @@ def update(args: argparse.Namespace) -> None:
         raise SystemExit(f"candidate has no status: {args.candidate_id}")
     if args.metadata:
         metadata = json.loads(Path(args.metadata).read_text(encoding="utf-8"))
-        text = text.rstrip() + "\n" + "\n".join(lines(metadata, 2)) + "\n"
+        # Helm values supplied by a cluster candidate must be top-level values;
+        # candidate metadata remains a separate YAML mapping.
+        text = text.rstrip() + "\n" + "\n".join(lines(metadata)) + "\n"
     path.write_text(text, encoding="utf-8")
 
 

@@ -48,6 +48,15 @@ commit SHA, and then commits the environment pointer. The pointer's
 `k8sLiveRevision` is immutable, so Argo does not follow moving `main` content
 for the selected environment.
 
+The environment runtime values own the optional deployment scope. For the
+current NA beta they contain
+`{"releaseStage":"na-beta","platforms":{"na1":"americas"}}`.
+Helm conditionally renders that scope into the shared backend ConfigMap and
+uses it to constrain runtime workers; reconciliation jobs consume the same
+ConfigMap. Omitting the block renders all supported platforms. Expanding the
+launch scope is therefore a normal values change followed by cluster candidate
+validation and the normal staging/promotion flow.
+
 The current pointer is the requested state. Argo health and Kubernetes state
 answer what actually rolled out; Git history preserves previous pointers for
 rollback.
