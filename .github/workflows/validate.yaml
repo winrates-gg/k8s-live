@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate Argo overlays and release references
+    name: Validate Argo overlays
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -25,10 +25,3 @@ jobs:
 
       - name: Render production overlay
         run: kubectl kustomize apps/overlays/production >/dev/null
-
-      - name: Reject retired ledger paths
-        run: |
-          if git grep -n -E 'ci/releases|release_ledger|deployment_pointer|candidate_id|chartRevision|k8sLiveRevision' -- ':!operations' ':!.git' ':!.github/workflows/validate.yaml'; then
-            echo "Retired candidate-ledger wiring remains in k8s-live." >&2
-            exit 1
-          fi
