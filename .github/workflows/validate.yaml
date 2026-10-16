@@ -28,7 +28,7 @@ jobs:
 
       - name: Reject retired ledger paths
         run: |
-          if git grep -n -E 'ci/releases|release_ledger|deployment_pointer|candidate_id|chartRevision|k8sLiveRevision' -- ':!operations' ':!.git'; then
+          if git grep -n -E 'ci/releases|release_ledger|deployment_pointer|candidate_id|chartRevision|k8sLiveRevision' -- ':!operations' ':!.git' ':!.github/workflows/validate.yaml'; then
             echo "Retired candidate-ledger wiring remains in k8s-live." >&2
             exit 1
           fi
