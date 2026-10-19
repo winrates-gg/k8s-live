@@ -117,13 +117,21 @@ jobs:
             exit 0
           fi
 
-          latest_number="$(git tag --list 'cluster-v0.0.*' | sed -E 's/^cluster-v0\.0\.//' | sort -n | tail -1)"
-          latest_number="${latest_number:-0}"
-          if [[ "$latest_number" -ge 99 ]]; then
-            echo "The cluster release counter is exhausted at v0.0.99. Choose a new major/minor release base before deploying again." >&2
-            exit 1
+          latest_tag="$(git tag --list 'cluster-v*' | sort -V | tail -1)"
+          if [[ -z "$latest_tag" ]]; then
+            major=0
+            minor=0
+            patch=0
+          else
+            IFS=. read -r major minor patch <<< "${latest_tag#cluster-v}"
           fi
-          next_release="cluster-v0.0.$((latest_number + 1))"
+          if [[ "$patch" -ge 99 ]]; then
+            minor=$((minor + 1))
+            patch=0
+          else
+            patch=$((patch + 1))
+          fi
+          next_release="cluster-v${major}.${minor}.${patch}"
           cat > "deployments/${ENVIRONMENT}.yaml" <<EOF
           environment: ${ENVIRONMENT}
           k8sLiveRelease: ${next_release}
