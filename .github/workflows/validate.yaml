@@ -20,6 +20,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Print release context
+        run: |
+          latest_tag="$(git ls-remote --tags origin 'refs/tags/cluster-v*' | awk -F/ '{sub(/\^\{\}$/, "", $3); print $3}' | sort -Vu | tail -1)"
+          echo "Latest cluster release tag: ${latest_tag:-none}"
+          echo "Validation SHA: ${GITHUB_SHA}"
+
       - name: Render staging overlay
         run: kubectl kustomize apps/overlays/staging >/dev/null
 

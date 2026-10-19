@@ -146,6 +146,26 @@ jobs:
           EOF
           echo "cluster_release=${next_release}" >> "$GITHUB_OUTPUT"
 
+      - name: Print deployment release context
+        env:
+          OPERATION: ${{ inputs.operation }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          CLUSTER_RELEASE: ${{ steps.state.outputs.cluster_release }}
+          BACKEND_RELEASE: ${{ inputs.backend_release }}
+          FRONTEND_RELEASE: ${{ inputs.frontend_release }}
+          CHART_RELEASE: ${{ inputs.chart_release }}
+        run: |
+          latest_tag="$(git tag --list 'cluster-v*' | sort -V | tail -1)"
+          echo "Latest cluster release tag: ${latest_tag:-none}"
+          echo "Selected cluster release tag: ${CLUSTER_RELEASE}"
+          echo "Operation: ${OPERATION}"
+          echo "Environment: ${ENVIRONMENT}"
+          if [[ "$OPERATION" == "deploy" ]]; then
+            echo "Backend release tag: ${BACKEND_RELEASE}"
+            echo "Frontend release tag: ${FRONTEND_RELEASE}"
+            echo "Helm chart release tag: ${CHART_RELEASE}"
+          fi
+
       - name: Commit and publish deployment state
         env:
           OPERATION: ${{ inputs.operation }}
