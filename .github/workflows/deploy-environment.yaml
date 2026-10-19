@@ -59,7 +59,7 @@ jobs:
         id: read_token
         uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.WRGG_GITOPS_READ_APP_ID }}
+          client-id: ${{ vars.WRGG_GITOPS_READ_APP_ID }}
           private-key: ${{ secrets.WRGG_GITOPS_READ_APP_PRIVATE_KEY }}
           owner: winrates-gg
           repositories: backend,frontend,k8s-helm-charts,k8s-live
