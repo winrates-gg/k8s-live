@@ -72,9 +72,9 @@ jobs:
           FRONTEND_RELEASE: ${{ inputs.frontend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
-          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          [[ "$FRONTEND_RELEASE" =~ ^frontend-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
-          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
+          [[ "$FRONTEND_RELEASE" =~ ^frontend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
+          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
           gh release view "$BACKEND_RELEASE" --repo winrates-gg/backend >/dev/null
           gh release view "$FRONTEND_RELEASE" --repo winrates-gg/frontend >/dev/null
           gh release view "$CHART_RELEASE" --repo winrates-gg/k8s-helm-charts >/dev/null
@@ -96,7 +96,7 @@ jobs:
           GH_TOKEN: ${{ steps.read_token.outputs.token }}
           CLUSTER_RELEASE: ${{ inputs.cluster_release }}
         run: |
-          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
           gh release view "$CLUSTER_RELEASE" --repo winrates-gg/k8s-live >/dev/null
           git cat-file -e "${CLUSTER_RELEASE}:deployments/${{ inputs.environment }}.yaml"
 
@@ -119,6 +119,10 @@ jobs:
 
           latest_number="$(git tag --list 'cluster-v0.0.*' | sed -E 's/^cluster-v0\.0\.//' | sort -n | tail -1)"
           latest_number="${latest_number:-0}"
+          if [[ "$latest_number" -ge 99 ]]; then
+            echo "The cluster release counter is exhausted at v0.0.99. Choose a new major/minor release base before deploying again." >&2
+            exit 1
+          fi
           next_release="cluster-v0.0.$((latest_number + 1))"
           cat > "deployments/${ENVIRONMENT}.yaml" <<EOF
           environment: ${ENVIRONMENT}
