@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "[REQUIRED] Choice: deploy selected releases or roll back to an existing cluster release"
+        description: "[REQUIRED] Choice: deploy (requires backend + chart tags) or rollback (requires a cluster tag)"
         required: true
         type: choice
         options:
@@ -20,15 +20,15 @@ on:
           - production
         default: staging
       backend_release:
-        description: "[OPTIONAL] String: backend GitHub Release tag, for example backend-v0.0.8 (deploy only)"
+        description: "[REQUIRED FOR DEPLOY] String: backend GitHub Release tag, for example backend-v0.0.8; leave blank for rollback"
         required: false
         type: string
       chart_release:
-        description: "[OPTIONAL] String: Helm chart GitHub Release tag, for example chart-v0.0.8 (deploy only)"
+        description: "[REQUIRED FOR DEPLOY] String: Helm chart GitHub Release tag, for example chart-v0.0.8; leave blank for rollback"
         required: false
         type: string
       cluster_release:
-        description: "[OPTIONAL] String: existing k8s-live GitHub Release tag, for example cluster-v0.0.8 (rollback only)"
+        description: "[REQUIRED FOR ROLLBACK] String: existing k8s-live GitHub Release tag, for example cluster-v0.0.8; leave blank for deploy"
         required: false
         type: string
 
@@ -67,8 +67,14 @@ jobs:
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
-          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
-          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
+          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || {
+            echo "Deploy requires backend_release in the form backend-v0.0.8." >&2
+            exit 1
+          }
+          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || {
+            echo "Deploy requires chart_release in the form chart-v0.0.8." >&2
+            exit 1
+          }
           gh release view "$BACKEND_RELEASE" --repo winrates-gg/backend >/dev/null
           gh release view "$CHART_RELEASE" --repo winrates-gg/k8s-helm-charts >/dev/null
 
@@ -89,7 +95,10 @@ jobs:
           GH_TOKEN: ${{ steps.read_token.outputs.token }}
           CLUSTER_RELEASE: ${{ inputs.cluster_release }}
         run: |
-          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
+          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || {
+            echo "Rollback requires cluster_release in the form cluster-v0.0.8." >&2
+            exit 1
+          }
           gh release view "$CLUSTER_RELEASE" --repo winrates-gg/k8s-live >/dev/null
           git cat-file -e "${CLUSTER_RELEASE}:deployments/${{ inputs.environment }}.yaml"
 
