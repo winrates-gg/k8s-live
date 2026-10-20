@@ -80,14 +80,9 @@ jobs:
 
       - name: Validate current k8s-live source
         if: ${{ inputs.operation == 'deploy' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          successful_runs="$(gh run list --repo winrates-gg/k8s-live --workflow validate.yaml --commit "$GITHUB_SHA" --json conclusion --jq '[.[] | select(.conclusion == "success")] | length')"
-          [[ "$successful_runs" -gt 0 ]] || {
-            echo "The current k8s-live commit has no successful validation run." >&2
-            exit 1
-          }
+          kubectl kustomize apps/overlays/staging >/dev/null
+          kubectl kustomize apps/overlays/production >/dev/null
 
       - name: Validate rollback release
         if: ${{ inputs.operation == 'rollback' }}
@@ -146,6 +141,25 @@ jobs:
           EOF
           echo "cluster_release=${next_release}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate generated deployment state
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          OPERATION: ${{ inputs.operation }}
+          BACKEND_RELEASE: ${{ inputs.backend_release }}
+          CHART_RELEASE: ${{ inputs.chart_release }}
+        run: |
+          state_file="deployments/${ENVIRONMENT}.yaml"
+          test -s "$state_file" || {
+            echo "Missing generated deployment state: ${state_file}" >&2
+            exit 1
+          }
+          grep -Eq "^environment: ${ENVIRONMENT}$" "$state_file" || exit 1
+          grep -Eq '^k8sLiveRelease: cluster-v[0-9]+\.[0-9]+\.[0-9]{1,2}$' "$state_file" || exit 1
+          if [[ "$OPERATION" == "deploy" ]]; then
+            grep -Eq "^backendRelease: ${BACKEND_RELEASE}$" "$state_file" || exit 1
+            grep -Eq "^chartRelease: ${CHART_RELEASE}$" "$state_file" || exit 1
+          fi
+
       - name: Print deployment release context
         env:
           OPERATION: ${{ inputs.operation }}
@@ -188,10 +202,11 @@ jobs:
             else
               git tag "${CLUSTER_RELEASE}"
             fi
+            commit_sha="$(git rev-parse HEAD)"
             git push origin HEAD:main "refs/tags/${CLUSTER_RELEASE}"
             if ! gh release view "$CLUSTER_RELEASE" >/dev/null 2>&1; then
               gh release create "$CLUSTER_RELEASE" \
-                --target "$CLUSTER_RELEASE" \
+                --target "$commit_sha" \
                 --title "$CLUSTER_RELEASE" \
                 --generate-notes \
                 --notes "Kubernetes desired state for ${ENVIRONMENT}."
