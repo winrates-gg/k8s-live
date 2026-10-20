@@ -20,15 +20,15 @@ on:
           - production
         default: staging
       backend_release:
-        description: "[REQUIRED FOR DEPLOY] String: backend GitHub Release tag, for example backend-v0.0.8; leave blank for rollback"
+        description: "[OPTIONAL] Backend GitHub Release tag for deploy, for example backend-v0.0.8; required when operation=deploy and ignored for rollback"
         required: false
         type: string
       chart_release:
-        description: "[REQUIRED FOR DEPLOY] String: Helm chart GitHub Release tag, for example chart-v0.0.8; leave blank for rollback"
+        description: "[OPTIONAL] Helm chart GitHub Release tag for deploy, for example chart-v0.0.8; required when operation=deploy and ignored for rollback"
         required: false
         type: string
       cluster_release:
-        description: "[REQUIRED FOR ROLLBACK] String: existing k8s-live GitHub Release tag, for example cluster-v0.0.8; leave blank for deploy"
+        description: "[OPTIONAL] Existing k8s-live GitHub Release tag for rollback, for example cluster-v0.0.8; required when operation=rollback and ignored for deploy"
         required: false
         type: string
 
