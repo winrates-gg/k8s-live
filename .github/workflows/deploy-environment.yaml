@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "Deploy selected application releases or roll back to an existing cluster release"
+        description: "[REQUIRED] Choice: deploy selected releases or roll back to an existing cluster release"
         required: true
         type: choice
         options:
@@ -12,7 +12,7 @@ on:
           - rollback
         default: deploy
       environment:
-        description: "Kubernetes environment to update"
+        description: "[REQUIRED] Choice: Kubernetes environment to update"
         required: true
         type: choice
         options:
@@ -20,19 +20,15 @@ on:
           - production
         default: staging
       backend_release:
-        description: "Backend GitHub Release tag for deploy"
-        required: false
-        type: string
-      frontend_release:
-        description: "Frontend GitHub Release tag for deploy"
+        description: "[OPTIONAL] String: backend GitHub Release tag, for example backend-v0.0.8 (deploy only)"
         required: false
         type: string
       chart_release:
-        description: "Helm chart GitHub Release tag for deploy"
+        description: "[OPTIONAL] String: Helm chart GitHub Release tag, for example chart-v0.0.8 (deploy only)"
         required: false
         type: string
       cluster_release:
-        description: "Existing cluster release tag for rollback"
+        description: "[OPTIONAL] String: existing k8s-live GitHub Release tag, for example cluster-v0.0.8 (rollback only)"
         required: false
         type: string
 
@@ -62,21 +58,18 @@ jobs:
           client-id: ${{ vars.WRGG_GITOPS_READ_APP_ID }}
           private-key: ${{ secrets.WRGG_GITOPS_READ_APP_PRIVATE_KEY }}
           owner: winrates-gg
-          repositories: backend,frontend,k8s-helm-charts,k8s-live
+          repositories: backend,k8s-helm-charts,k8s-live
 
       - name: Validate release inputs
         if: ${{ inputs.operation == 'deploy' }}
         env:
           GH_TOKEN: ${{ steps.read_token.outputs.token }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
-          FRONTEND_RELEASE: ${{ inputs.frontend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
           [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
-          [[ "$FRONTEND_RELEASE" =~ ^frontend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
           [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || exit 1
           gh release view "$BACKEND_RELEASE" --repo winrates-gg/backend >/dev/null
-          gh release view "$FRONTEND_RELEASE" --repo winrates-gg/frontend >/dev/null
           gh release view "$CHART_RELEASE" --repo winrates-gg/k8s-helm-charts >/dev/null
 
       - name: Validate current k8s-live source
@@ -106,7 +99,6 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           ENVIRONMENT: ${{ inputs.environment }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
-          FRONTEND_RELEASE: ${{ inputs.frontend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
           CLUSTER_RELEASE: ${{ inputs.cluster_release }}
         run: |
@@ -136,7 +128,6 @@ jobs:
           environment: ${ENVIRONMENT}
           k8sLiveRelease: ${next_release}
           backendRelease: ${BACKEND_RELEASE}
-          frontendRelease: ${FRONTEND_RELEASE}
           chartRelease: ${CHART_RELEASE}
           backend:
             apiImage:
@@ -152,7 +143,6 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           CLUSTER_RELEASE: ${{ steps.state.outputs.cluster_release }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
-          FRONTEND_RELEASE: ${{ inputs.frontend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
           latest_tag="$(git tag --list 'cluster-v*' | sort -V | tail -1)"
@@ -162,7 +152,6 @@ jobs:
           echo "Environment: ${ENVIRONMENT}"
           if [[ "$OPERATION" == "deploy" ]]; then
             echo "Backend release tag: ${BACKEND_RELEASE}"
-            echo "Frontend release tag: ${FRONTEND_RELEASE}"
             echo "Helm chart release tag: ${CHART_RELEASE}"
           fi
 

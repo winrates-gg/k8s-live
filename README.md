@@ -14,7 +14,7 @@ into one immutable Kubernetes desired-state revision.
 The target model is:
 
 ```text
-backend/frontend/chart releases
+backend/chart releases
   -> cluster GitHub Release and tag
   -> environment deployment file
   -> Argo reconciliation
@@ -36,11 +36,13 @@ deployments/staging.yaml
 deployments/production.yaml
 ```
 
-The cluster workflow verifies the selected backend, frontend, and Helm
-GitHub Releases, writes the environment deployment file, and publishes a
-`cluster-v0.0.N` GitHub Release and tag. The deployment file selects the
-immutable cluster and application releases. Rollback selects an existing
-cluster release and copies its environment state forward.
+The cluster workflow verifies the selected backend and Helm GitHub Releases,
+writes the environment deployment file, and publishes a `cluster-v0.0.N`
+GitHub Release and tag. Frontend publication is separate: its workflow writes
+the selected bundle directly to the environment's S3 release and `current/`
+paths. The deployment file therefore selects only the immutable cluster,
+backend, and chart releases. Rollback selects an existing cluster release and
+copies its environment state forward.
 
 The environment runtime values own the optional deployment scope. For the
 current NA beta they contain
