@@ -20,11 +20,11 @@ on:
           - production
         default: staging
       backend_release:
-        description: "[OPTIONAL] Backend Git tag for deploy, for example backend-v1.34.8; required when operation=deploy and ignored for rollback"
+        description: "[DEPLOY ONLY] Backend Git tag to deploy, for example backend-v1.34.8; required when operation=deploy and ignored for rollback"
         required: false
         type: string
       chart_release:
-        description: "[OPTIONAL] Helm chart Git tag for deploy, for example chart-v1.34.8; required when operation=deploy and ignored for rollback"
+        description: "[DEPLOY ONLY] Helm chart Git tag to deploy, for example chart-v1.34.8; required when operation=deploy and ignored for rollback"
         required: false
         type: string
 
