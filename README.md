@@ -2,7 +2,7 @@
 
 This repository is the shared Argo CD desired-state repository for staging and
 production. The environment overlays are intentionally separate even though
-they use the same ApplicationSet and Helm chart templates.
+they use the same base ApplicationSet manifests and Helm chart templates.
 
 ## Deployment model
 
@@ -44,6 +44,44 @@ paths. The deployment file therefore selects only the immutable cluster,
 backend, and chart tags. Rollback selects an existing cluster tag and
 copies its environment state forward.
 
+## Application order
+
+Bootstrap is a separate Argo ApplicationSet and remains responsible for
+cluster-level services. The application ApplicationSet renders one Argo
+Application with two Helm sources so resource sync waves are shared across
+initialization and runtime:
+
+```text
+bootstrap ApplicationSet
+  -> namespaces, ingress, Argo support
+
+application ApplicationSet
+  -> database migration       wave 10
+  -> database seed             wave 20
+  -> partitions and row data   wave 30
+  -> initial asset refreshes   waves 40-50
+  -> Redis                     wave 60
+  -> runtime workers           wave 70
+  -> API                       wave 80
+  -> recurring reconciliation  wave 90
+```
+
+The application ApplicationSet uses two Helm sources: `init` for the finite
+blocking Jobs and `runtime` for the API, workers, Redis, and recurring
+CronJobs. Reconciliation is a runtime workload, not a separate deployment
+layer.
+
+The initialization chart is one-time setup, not a separate runtime service.
+If an initialization Job fails, fix or publish the relevant code and let
+Argo replace that Job before the later waves are considered healthy.
+
+Normal backend or chart changes do not require replacing the control plane:
+publish the new artifacts, create the next cluster desired state, and let
+Argo reconcile the existing cluster. Control-plane replacement is the
+recovery path for a broken or misconfigured cluster host. Once the replacement
+host is ready, the root Applications and this ApplicationSet recreate the
+desired application state from Git.
+
 The environment runtime values own the optional deployment scope. For the
 current NA beta they contain
 `{"releaseStage":"na-beta","platforms":{"na1":"americas"}}`.
@@ -61,13 +99,13 @@ Before the first cluster deployment exists, the environment state file is
 absent and the ApplicationSet intentionally creates no runtime Applications.
 
 The backend API and worker image repositories should be defined once per
-environment and consumed by both runtime and reconcile charts. The selected
+environment and consumed by the runtime chart. The selected
 backend tag supplies the immutable API and worker image tags.
 
 ## Repository layout
 
 ```text
-apps/base/                  Shared Argo ApplicationSet
+apps/base/                  Shared Argo ApplicationSets
 apps/overlays/staging/      Staging Argo entry point
 apps/overlays/production/   Production Argo entry point
 environments/<env>/values/  Environment-specific Helm values

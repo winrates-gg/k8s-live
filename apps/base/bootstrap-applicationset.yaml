@@ -1,0 +1,45 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: wrgg-bootstrap-app
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+  generators:
+    - git:
+        repoURL: https://github.com/winrates-gg/k8s-live.git
+        revision: main
+        files:
+          - path: deployments/*.yaml
+  template:
+    metadata:
+      name: wrgg-bootstrap
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-wave: "0"
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/winrates-gg/k8s-helm-charts.git
+          targetRevision: "{{ .chartRelease }}"
+          path: charts/bootstrap
+          helm:
+            releaseName: wrgg-bootstrap
+            valueFiles:
+              - "$values/environments/{{ .environment }}/values/bootstrap.yaml"
+              - "$values/deployments/{{ .environment }}.yaml"
+        - repoURL: https://github.com/winrates-gg/k8s-live.git
+          targetRevision: "{{ .k8sLiveRelease }}"
+          ref: values
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: argocd
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - SkipDryRunOnMissingResource=true

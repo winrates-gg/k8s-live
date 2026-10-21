@@ -1,0 +1,9 @@
+environment: staging
+
+backend:
+  apiImage:
+    repository: 124188344567.dkr.ecr.us-east-2.amazonaws.com/wrgg-staging-backend-api
+    pullPolicy: IfNotPresent
+  workerImage:
+    repository: 124188344567.dkr.ecr.us-east-2.amazonaws.com/wrgg-staging-backend-worker
+    pullPolicy: IfNotPresent

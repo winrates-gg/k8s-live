@@ -10,5 +10,14 @@ patches:
       name: wrgg-environment-apps
     patch: |-
       - op: replace
-        path: /spec/generators/0/matrix/generators/0/git/files/0/path
+        path: /spec/generators/0/git/files/0/path
+        value: deployments/staging.yaml
+  - target:
+      group: argoproj.io
+      version: v1alpha1
+      kind: ApplicationSet
+      name: wrgg-bootstrap-app
+    patch: |-
+      - op: replace
+        path: /spec/generators/0/git/files/0/path
         value: deployments/staging.yaml

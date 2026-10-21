@@ -1,0 +1,9 @@
+environment: production
+
+backend:
+  apiImage:
+    repository: 152088127544.dkr.ecr.us-east-2.amazonaws.com/wrgg-production-backend-api
+    pullPolicy: IfNotPresent
+  workerImage:
+    repository: 152088127544.dkr.ecr.us-east-2.amazonaws.com/wrgg-production-backend-worker
+    pullPolicy: IfNotPresent
