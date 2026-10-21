@@ -20,15 +20,11 @@ on:
           - production
         default: staging
       backend_release:
-        description: "[OPTIONAL] Backend GitHub Release tag for deploy, for example backend-v0.0.8; required when operation=deploy and ignored for rollback"
+        description: "[OPTIONAL] Backend Git tag for deploy, for example backend-v1.34.8; required when operation=deploy and ignored for rollback"
         required: false
         type: string
       chart_release:
-        description: "[OPTIONAL] Helm chart GitHub Release tag for deploy, for example chart-v0.0.8; required when operation=deploy and ignored for rollback"
-        required: false
-        type: string
-      cluster_release:
-        description: "[OPTIONAL] Existing k8s-live GitHub Release tag for rollback, for example cluster-v0.0.8; required when operation=rollback and ignored for deploy"
+        description: "[OPTIONAL] Helm chart Git tag for deploy, for example chart-v1.34.8; required when operation=deploy and ignored for rollback"
         required: false
         type: string
 
@@ -46,12 +42,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out k8s-live main
+      - name: Create repository write token
+        id: write_token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.WRGG_GITOPS_WRITE_APP_ID }}
+          private-key: ${{ secrets.WRGG_GITOPS_WRITE_APP_PRIVATE_KEY }}
+          owner: winrates-gg
+          repositories: k8s-live
+
+      - name: Check out selected k8s-live ref
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref }}
+          token: ${{ steps.write_token.outputs.token }}
           fetch-depth: 0
 
-      - name: Create read token for release validation
+      - name: Create read token for tag validation
         id: read_token
         uses: actions/create-github-app-token@v3
         with:
@@ -60,23 +67,42 @@ jobs:
           owner: winrates-gg
           repositories: backend,k8s-helm-charts,k8s-live
 
-      - name: Validate release inputs
+      - name: Validate selected k8s-live ref
+        env:
+          OPERATION: ${{ inputs.operation }}
+          SOURCE_REF_TYPE: ${{ github.ref_type }}
+          SOURCE_REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$OPERATION" == "deploy" ]]; then
+            [[ "$SOURCE_REF_TYPE" == "branch" && "$SOURCE_REF_NAME" == "main" ]] || {
+              echo "Deploy must run from main selected in the workflow ref selector." >&2
+              exit 1
+            }
+          else
+            [[ "$SOURCE_REF_TYPE" == "tag" && "$SOURCE_REF_NAME" =~ ^cluster-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
+              echo "Rollback must run from a cluster-vN.N.N tag selected in the workflow ref selector." >&2
+              exit 1
+            }
+          fi
+
+      - name: Validate tag inputs
         if: ${{ inputs.operation == 'deploy' }}
         env:
           GH_TOKEN: ${{ steps.read_token.outputs.token }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
-          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || {
-            echo "Deploy requires backend_release in the form backend-v0.0.8." >&2
+          [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
+            echo "Deploy requires backend_release in the form backend-v1.34.8." >&2
             exit 1
           }
-          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || {
-            echo "Deploy requires chart_release in the form chart-v0.0.8." >&2
+          [[ "$CHART_RELEASE" =~ ^chart-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
+            echo "Deploy requires chart_release in the form chart-v1.34.8." >&2
             exit 1
           }
-          gh release view "$BACKEND_RELEASE" --repo winrates-gg/backend >/dev/null
-          gh release view "$CHART_RELEASE" --repo winrates-gg/k8s-helm-charts >/dev/null
+          gh api "repos/winrates-gg/backend/git/ref/tags/${BACKEND_RELEASE}" >/dev/null
+          gh api "repos/winrates-gg/k8s-helm-charts/git/ref/tags/${CHART_RELEASE}" >/dev/null
 
       - name: Validate current k8s-live source
         if: ${{ inputs.operation == 'deploy' }}
@@ -84,17 +110,11 @@ jobs:
           kubectl kustomize apps/overlays/staging >/dev/null
           kubectl kustomize apps/overlays/production >/dev/null
 
-      - name: Validate rollback release
+      - name: Validate rollback state
         if: ${{ inputs.operation == 'rollback' }}
         env:
-          GH_TOKEN: ${{ steps.read_token.outputs.token }}
-          CLUSTER_RELEASE: ${{ inputs.cluster_release }}
+          CLUSTER_RELEASE: ${{ github.ref_name }}
         run: |
-          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]+\.[0-9]+\.[0-9]{1,2}$ ]] || {
-            echo "Rollback requires cluster_release in the form cluster-v0.0.8." >&2
-            exit 1
-          }
-          gh release view "$CLUSTER_RELEASE" --repo winrates-gg/k8s-live >/dev/null
           git cat-file -e "${CLUSTER_RELEASE}:deployments/${{ inputs.environment }}.yaml"
 
       - name: Create deployment state
@@ -104,12 +124,12 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
-          CLUSTER_RELEASE: ${{ inputs.cluster_release }}
+          SELECTED_CLUSTER_RELEASE: ${{ github.ref_name }}
         run: |
           mkdir -p deployments
           if [[ "$OPERATION" == "rollback" ]]; then
-            git show "${CLUSTER_RELEASE}:deployments/${ENVIRONMENT}.yaml" > "deployments/${ENVIRONMENT}.yaml"
-            echo "cluster_release=${CLUSTER_RELEASE}" >> "$GITHUB_OUTPUT"
+            git show "${SELECTED_CLUSTER_RELEASE}:deployments/${ENVIRONMENT}.yaml" > "deployments/${ENVIRONMENT}.yaml"
+            echo "cluster_release=${SELECTED_CLUSTER_RELEASE}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -121,9 +141,22 @@ jobs:
           else
             IFS=. read -r major minor patch <<< "${latest_tag#cluster-v}"
           fi
+          if (( major > 99 || minor > 99 || patch > 99 )); then
+            echo "Latest cluster tag exceeds the two-digit version contract: ${latest_tag}" >&2
+            exit 1
+          fi
           if [[ "$patch" -ge 99 ]]; then
-            minor=$((minor + 1))
             patch=0
+            if [[ "$minor" -ge 99 ]]; then
+              minor=0
+              major=$((major + 1))
+            else
+              minor=$((minor + 1))
+            fi
+            if (( major > 99 )); then
+              echo "No two-digit cluster version remains after ${latest_tag}." >&2
+              exit 1
+            fi
           else
             patch=$((patch + 1))
           fi
@@ -154,13 +187,13 @@ jobs:
             exit 1
           }
           grep -Eq "^environment: ${ENVIRONMENT}$" "$state_file" || exit 1
-          grep -Eq '^k8sLiveRelease: cluster-v[0-9]+\.[0-9]+\.[0-9]{1,2}$' "$state_file" || exit 1
+          grep -Eq '^k8sLiveRelease: cluster-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$' "$state_file" || exit 1
           if [[ "$OPERATION" == "deploy" ]]; then
             grep -Eq "^backendRelease: ${BACKEND_RELEASE}$" "$state_file" || exit 1
             grep -Eq "^chartRelease: ${CHART_RELEASE}$" "$state_file" || exit 1
           fi
 
-      - name: Print deployment release context
+      - name: Print deployment tag context
         env:
           OPERATION: ${{ inputs.operation }}
           ENVIRONMENT: ${{ inputs.environment }}
@@ -169,13 +202,13 @@ jobs:
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
           latest_tag="$(git tag --list 'cluster-v*' | sort -V | tail -1)"
-          echo "Latest cluster release tag: ${latest_tag:-none}"
-          echo "Selected cluster release tag: ${CLUSTER_RELEASE}"
+          echo "Latest cluster tag: ${latest_tag:-none}"
+          echo "Selected cluster tag: ${CLUSTER_RELEASE}"
           echo "Operation: ${OPERATION}"
           echo "Environment: ${ENVIRONMENT}"
           if [[ "$OPERATION" == "deploy" ]]; then
-            echo "Backend release tag: ${BACKEND_RELEASE}"
-            echo "Helm chart release tag: ${CHART_RELEASE}"
+            echo "Backend tag: ${BACKEND_RELEASE}"
+            echo "Helm chart tag: ${CHART_RELEASE}"
           fi
 
       - name: Commit and publish deployment state
@@ -183,7 +216,7 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           ENVIRONMENT: ${{ inputs.environment }}
           CLUSTER_RELEASE: ${{ steps.state.outputs.cluster_release }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.write_token.outputs.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

@@ -7,26 +7,26 @@ they use the same ApplicationSet and Helm chart templates.
 ## Deployment model
 
 This repository contains the desired Kubernetes configuration. It does not
-build application artifacts and it does not own backend or frontend candidate
-records. It owns cluster candidates that resolve the selected app candidates
-into one immutable Kubernetes desired-state revision.
+build application artifacts and it does not own backend or frontend artifact
+records. It owns cluster tags that resolve the selected app artifacts into one
+immutable Kubernetes desired-state revision.
 
 The target model is:
 
 ```text
-backend/chart releases
-  -> cluster GitHub Release and tag
+backend/chart tags
+  -> cluster tag
   -> environment deployment file
   -> Argo reconciliation
 ```
 
-The generated environment Applications select an immutable Helm release and
-an immutable `k8s-live` cluster release. The small root Application tracks
-`main` only to load the pointer-aware ApplicationSet; the selected runtime
+The generated environment Applications select an immutable Helm tag and
+an immutable `k8s-live` cluster tag. The small root Application tracks
+`main` only to load the desired-state ApplicationSet; the selected runtime
 configuration and chart are still release-pinned.
 
-The environment pointers live in this repository. CI moves the staging
-pointer first and moves the production pointer after validation. Argo remains
+The environment desired-state files live in this repository. CI moves the
+staging state first and moves the production state after validation. Argo remains
 auto-synced in normal operation.
 
 Environment deployment state is maintained in this repository:
@@ -36,12 +36,12 @@ deployments/staging.yaml
 deployments/production.yaml
 ```
 
-The cluster workflow verifies the selected backend and Helm GitHub Releases,
-writes the environment deployment file, and publishes a `cluster-v0.0.N`
-GitHub Release and tag. Frontend publication is separate: its workflow writes
+The cluster workflow verifies the selected backend and Helm tags,
+writes the environment deployment file, and publishes a `cluster-v1.34.8`-shaped tag.
+The workflow may also create an optional GitHub Release page. Frontend publication is separate: its workflow writes
 the selected bundle directly to the environment's S3 release and `current/`
 paths. The deployment file therefore selects only the immutable cluster,
-backend, and chart releases. Rollback selects an existing cluster release and
+backend, and chart tags. Rollback selects an existing cluster tag and
 copies its environment state forward.
 
 The environment runtime values own the optional deployment scope. For the
@@ -50,19 +50,19 @@ current NA beta they contain
 Helm conditionally renders that scope into the shared backend ConfigMap and
 uses it to constrain runtime workers; reconciliation jobs consume the same
 ConfigMap. Omitting the block renders all supported platforms. Expanding the
-launch scope is therefore a normal values change followed by cluster candidate
+launch scope is therefore a normal values change followed by cluster-tag
 validation and the normal staging/promotion flow.
 
-The current pointer is the requested state. Argo health and Kubernetes state
+The deployment file is the requested state. Argo health and Kubernetes state
 answer what actually rolled out; Git history preserves previous pointers for
 rollback.
 
-Before the first cluster candidate exists, the environment pointer file is
+Before the first cluster deployment exists, the environment state file is
 absent and the ApplicationSet intentionally creates no runtime Applications.
 
 The backend API and worker image repositories should be defined once per
 environment and consumed by both runtime and reconcile charts. The selected
-backend candidate supplies the immutable API and worker digests.
+backend tag supplies the immutable API and worker image tags.
 
 ## Repository layout
 
@@ -75,6 +75,6 @@ deployments/                 Environment release selections
 root/                        Cluster-specific root Applications
 ```
 
-The desired-state pointer answers which revision an environment requests. Argo
+The desired-state file answers which revision an environment requests. Argo
 health and Kubernetes state answer what actually rolled out. Rollback is a
 revision-pin change, not a rebuild.
