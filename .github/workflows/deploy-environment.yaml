@@ -1,4 +1,4 @@
-name: "[MNL] Deploy Kubernetes environment"
+name: "[02 MNL] Deploy Kubernetes environment"
 
 on:
   workflow_dispatch:
