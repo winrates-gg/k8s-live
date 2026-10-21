@@ -14,11 +14,6 @@ backend:
     pullPolicy: IfNotPresent
   ingress:
     host: api.staging.winrates.gg
-  secrets:
-    databaseUrl: 'postgresql+asyncpg://wrgg_app_role:{{ .pg_password }}@wrgg-staging-control-plane:5432/wrgg_staging'
-    databaseUrlForAlembic: 'postgresql://wrgg_app_role:{{ .pg_password }}@wrgg-staging-control-plane:5432/wrgg_staging'
-    postgresPasswordSsmPath: /wrgg/staging/seeded/control_plane/cluster/eso/runtime/postgres/wrgg_app_role/password
-    riotApiKeySsmPath: /wrgg/staging/seeded/control_plane/eso/runtime/riot/api_key
   config:
     ndLogLevel: "3"
     matchArchiveRetentionDays: "60"

@@ -4,11 +4,6 @@ backend:
   workerImage:
     repository: 124188344567.dkr.ecr.us-east-2.amazonaws.com/wrgg-staging-backend-worker
     pullPolicy: IfNotPresent
-  secrets:
-    databaseUrl: 'postgresql+asyncpg://wrgg_app_role:{{ .pg_password }}@wrgg-staging-control-plane:5432/wrgg_staging'
-    databaseUrlForAlembic: 'postgresql://wrgg_app_role:{{ .pg_password }}@wrgg-staging-control-plane:5432/wrgg_staging'
-    postgresPasswordSsmPath: /wrgg/staging/seeded/control_plane/cluster/eso/runtime/postgres/wrgg_app_role/password
-    riotApiKeySsmPath: /wrgg/staging/seeded/control_plane/cluster/eso/runtime/riot/api_key
   config:
     ndLogLevel: "3"
 
