@@ -36,9 +36,11 @@ deployments/staging.yaml
 deployments/production.yaml
 ```
 
-The cluster workflow verifies the selected backend and Helm tags,
-writes the environment deployment file, and publishes a `cluster-v1.34.8`-shaped tag.
-The workflow may also create an optional GitHub Release page. Frontend publication is separate: its workflow writes
+The cluster workflow runs from `main`, verifies the selected backend and Helm
+tags, writes the environment deployment file, and publishes a
+`cluster-v1.34.8`-shaped tag. Rollback runs through the same workflow with an
+explicit `rollback_tag` input. The workflow may also create an optional
+GitHub Release page. Frontend publication is separate: its workflow writes
 the selected bundle directly to the environment's S3 release and `current/`
 paths. The deployment file therefore selects only the immutable cluster,
 backend, and chart tags. Rollback selects an existing cluster tag and
@@ -114,5 +116,5 @@ root/                        Cluster-specific root Applications
 ```
 
 The desired-state file answers which revision an environment requests. Argo
-health and Kubernetes state answer what actually rolled out. Rollback is a
-revision-pin change, not a rebuild.
+health and Kubernetes state answer what actually rolled out. Rollback is an
+explicit revision-pin change, not a rebuild.

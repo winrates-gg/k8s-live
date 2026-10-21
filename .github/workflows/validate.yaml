@@ -1,4 +1,4 @@
-name: "[01 AUTO] Validate Kubernetes live configuration"
+name: "[01 AUTO COMMIT] Validate Kubernetes live configuration"
 
 on:
   push:

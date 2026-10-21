@@ -1,10 +1,10 @@
-name: "[02 MNL] Deploy Kubernetes environment"
+name: "[02 MNL MAIN] Deploy Kubernetes environment"
 
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "[REQUIRED] Choice: deploy (requires backend + chart tags) or rollback (requires a cluster tag)"
+        description: "[REQUIRED] Operation: deploy selected artifacts or restore a prior cluster tag"
         required: true
         type: choice
         options:
@@ -20,11 +20,15 @@ on:
           - production
         default: staging
       backend_release:
-        description: "[DEPLOY ONLY] Backend Git tag to deploy, for example backend-v1.34.8; required when operation=deploy and ignored for rollback"
+        description: "[DEPLOY ONLY] [REQUIRED] Backend Git tag, for example backend-v1.34.8; ignored for rollback"
         required: false
         type: string
       chart_release:
-        description: "[DEPLOY ONLY] Helm chart Git tag to deploy, for example chart-v1.34.8; required when operation=deploy and ignored for rollback"
+        description: "[DEPLOY ONLY] [REQUIRED] Helm chart Git tag, for example chart-v1.34.8; ignored for rollback"
+        required: false
+        type: string
+      rollback_tag:
+        description: "[OPTIONAL] [ROLLBACK ONLY] Existing cluster-vN.N.N tag to restore; required when operation=rollback and ignored for deploy"
         required: false
         type: string
 
@@ -41,6 +45,9 @@ jobs:
     name: ${{ inputs.operation }} ${{ inputs.environment }}
     runs-on: ubuntu-latest
 
+    outputs:
+      cluster_release: ${{ steps.state.outputs.cluster_release }}
+
     steps:
       - name: Create repository write token
         id: write_token
@@ -54,7 +61,7 @@ jobs:
       - name: Check out selected k8s-live ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: main
           token: ${{ steps.write_token.outputs.token }}
           fetch-depth: 0
 
@@ -69,22 +76,14 @@ jobs:
 
       - name: Validate selected k8s-live ref
         env:
-          OPERATION: ${{ inputs.operation }}
           SOURCE_REF_TYPE: ${{ github.ref_type }}
           SOURCE_REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          if [[ "$OPERATION" == "deploy" ]]; then
-            [[ "$SOURCE_REF_TYPE" == "branch" && "$SOURCE_REF_NAME" == "main" ]] || {
-              echo "Deploy must run from main selected in the workflow ref selector." >&2
-              exit 1
-            }
-          else
-            [[ "$SOURCE_REF_TYPE" == "tag" && "$SOURCE_REF_NAME" =~ ^cluster-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
-              echo "Rollback must run from a cluster-vN.N.N tag selected in the workflow ref selector." >&2
-              exit 1
-            }
-          fi
+          [[ "$SOURCE_REF_TYPE" == "branch" && "$SOURCE_REF_NAME" == "main" ]] || {
+            echo "This workflow must run from main. Select the rollback tag in rollback_tag instead." >&2
+            exit 1
+          }
 
       - name: Validate tag inputs
         if: ${{ inputs.operation == 'deploy' }}
@@ -113,8 +112,14 @@ jobs:
       - name: Validate rollback state
         if: ${{ inputs.operation == 'rollback' }}
         env:
-          CLUSTER_RELEASE: ${{ github.ref_name }}
+          CLUSTER_RELEASE: ${{ inputs.rollback_tag }}
         run: |
+          [[ "$CLUSTER_RELEASE" =~ ^cluster-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
+            echo "rollback_tag must look like cluster-v1.34.8." >&2
+            exit 1
+          }
+          git fetch origin --tags
+          git rev-parse "${CLUSTER_RELEASE}^{commit}" >/dev/null
           git cat-file -e "${CLUSTER_RELEASE}:deployments/${{ inputs.environment }}.yaml"
 
       - name: Create deployment state
@@ -124,12 +129,12 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
-          SELECTED_CLUSTER_RELEASE: ${{ github.ref_name }}
+          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
         run: |
           mkdir -p deployments
           if [[ "$OPERATION" == "rollback" ]]; then
-            git show "${SELECTED_CLUSTER_RELEASE}:deployments/${ENVIRONMENT}.yaml" > "deployments/${ENVIRONMENT}.yaml"
-            echo "cluster_release=${SELECTED_CLUSTER_RELEASE}" >> "$GITHUB_OUTPUT"
+            git show "${ROLLBACK_TAG}:deployments/${ENVIRONMENT}.yaml" > "deployments/${ENVIRONMENT}.yaml"
+            echo "cluster_release=${ROLLBACK_TAG}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -209,6 +214,8 @@ jobs:
           if [[ "$OPERATION" == "deploy" ]]; then
             echo "Backend tag: ${BACKEND_RELEASE}"
             echo "Helm chart tag: ${CHART_RELEASE}"
+          else
+            echo "Rollback tag: ${CLUSTER_RELEASE}"
           fi
 
       - name: Commit and publish deployment state
@@ -247,3 +254,22 @@ jobs:
           else
             git push origin HEAD:main
           fi
+
+  result:
+    name: Applied ${{ needs.deploy.outputs.cluster_release }}
+    needs: deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Show deployment result
+        env:
+          CLUSTER_RELEASE: ${{ needs.deploy.outputs.cluster_release }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          OPERATION: ${{ inputs.operation }}
+        run: |
+          {
+            echo "## Kubernetes desired-state update"
+            echo "- Cluster tag: ${CLUSTER_RELEASE}"
+            echo "- Environment: ${ENVIRONMENT}"
+            echo "- Operation: ${OPERATION}"
+          } >> "$GITHUB_STEP_SUMMARY"
