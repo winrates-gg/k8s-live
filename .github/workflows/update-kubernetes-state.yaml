@@ -1,16 +1,16 @@
-name: "[02 MNL MAIN] Deploy Kubernetes environment"
+name: "[02 MNL MAIN] Update Kubernetes desired state"
 
 on:
   workflow_dispatch:
     inputs:
       operation:
-        description: "[REQUIRED] Operation: deploy selected artifacts or restore a prior cluster tag"
+        description: "[REQUIRED] Operation: update selected artifacts or restore a prior cluster tag"
         required: true
         type: choice
         options:
-          - deploy
+          - update
           - rollback
-        default: deploy
+        default: update
       environment:
         description: "[REQUIRED] Choice: Kubernetes environment to update"
         required: true
@@ -20,20 +20,20 @@ on:
           - production
         default: staging
       backend_release:
-        description: "[DEPLOY ONLY] [REQUIRED] Backend Git tag, for example backend-v1.34.8; ignored for rollback"
+        description: "[UPDATE ONLY] [REQUIRED] Backend Git tag, for example backend-v1.34.8; ignored for rollback"
         required: false
         type: string
       chart_release:
-        description: "[DEPLOY ONLY] [REQUIRED] Helm chart Git tag, for example chart-v1.34.8; ignored for rollback"
+        description: "[UPDATE ONLY] [REQUIRED] Helm chart Git tag, for example chart-v1.34.8; ignored for rollback"
         required: false
         type: string
       rollback_tag:
-        description: "[OPTIONAL] [ROLLBACK ONLY] Existing cluster-vN.N.N tag to restore; required when operation=rollback and ignored for deploy"
+        description: "[OPTIONAL] [ROLLBACK ONLY] Existing cluster-vN.N.N tag to restore; required when operation=rollback and ignored for update"
         required: false
         type: string
 
 concurrency:
-  group: k8s-live-deploy
+  group: k8s-live-update-state
   cancel-in-progress: false
 
 permissions:
@@ -41,7 +41,7 @@ permissions:
   actions: read
 
 jobs:
-  deploy:
+  update:
     name: ${{ inputs.operation }} ${{ inputs.environment }}
     runs-on: ubuntu-latest
 
@@ -86,25 +86,25 @@ jobs:
           }
 
       - name: Validate tag inputs
-        if: ${{ inputs.operation == 'deploy' }}
+        if: ${{ inputs.operation == 'update' }}
         env:
           GH_TOKEN: ${{ steps.read_token.outputs.token }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
         run: |
           [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
-            echo "Deploy requires backend_release in the form backend-v1.34.8." >&2
+            echo "Update requires backend_release in the form backend-v1.34.8." >&2
             exit 1
           }
           [[ "$CHART_RELEASE" =~ ^chart-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
-            echo "Deploy requires chart_release in the form chart-v1.34.8." >&2
+            echo "Update requires chart_release in the form chart-v1.34.8." >&2
             exit 1
           }
           gh api "repos/winrates-gg/backend/git/ref/tags/${BACKEND_RELEASE}" >/dev/null
           gh api "repos/winrates-gg/k8s-helm-charts/git/ref/tags/${CHART_RELEASE}" >/dev/null
 
       - name: Validate current k8s-live source
-        if: ${{ inputs.operation == 'deploy' }}
+        if: ${{ inputs.operation == 'update' }}
         run: |
           kubectl kustomize apps/overlays/staging >/dev/null
           kubectl kustomize apps/overlays/production >/dev/null
@@ -122,7 +122,7 @@ jobs:
           git rev-parse "${CLUSTER_RELEASE}^{commit}" >/dev/null
           git cat-file -e "${CLUSTER_RELEASE}:deployments/${{ inputs.environment }}.yaml"
 
-      - name: Create deployment state
+      - name: Create environment desired state
         id: state
         env:
           OPERATION: ${{ inputs.operation }}
@@ -179,7 +179,7 @@ jobs:
           EOF
           echo "cluster_release=${next_release}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate generated deployment state
+      - name: Validate generated desired state
         env:
           ENVIRONMENT: ${{ inputs.environment }}
           OPERATION: ${{ inputs.operation }}
@@ -193,12 +193,12 @@ jobs:
           }
           grep -Eq "^environment: ${ENVIRONMENT}$" "$state_file" || exit 1
           grep -Eq '^k8sLiveRelease: cluster-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$' "$state_file" || exit 1
-          if [[ "$OPERATION" == "deploy" ]]; then
+          if [[ "$OPERATION" == "update" ]]; then
             grep -Eq "^backendRelease: ${BACKEND_RELEASE}$" "$state_file" || exit 1
             grep -Eq "^chartRelease: ${CHART_RELEASE}$" "$state_file" || exit 1
           fi
 
-      - name: Print deployment tag context
+      - name: Print desired-state tag context
         env:
           OPERATION: ${{ inputs.operation }}
           ENVIRONMENT: ${{ inputs.environment }}
@@ -211,14 +211,14 @@ jobs:
           echo "Selected cluster tag: ${CLUSTER_RELEASE}"
           echo "Operation: ${OPERATION}"
           echo "Environment: ${ENVIRONMENT}"
-          if [[ "$OPERATION" == "deploy" ]]; then
+          if [[ "$OPERATION" == "update" ]]; then
             echo "Backend tag: ${BACKEND_RELEASE}"
             echo "Helm chart tag: ${CHART_RELEASE}"
           else
             echo "Rollback tag: ${CLUSTER_RELEASE}"
           fi
 
-      - name: Commit and publish deployment state
+      - name: Commit and publish desired state
         env:
           OPERATION: ${{ inputs.operation }}
           ENVIRONMENT: ${{ inputs.environment }}
@@ -229,11 +229,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "deployments/${ENVIRONMENT}.yaml"
           if git diff --cached --quiet; then
-            echo "Deployment state is already current."
+            echo "Desired state is already current."
           else
-            git commit -m "deploy(${ENVIRONMENT}): ${CLUSTER_RELEASE}"
+            git commit -m "update(${ENVIRONMENT}): ${CLUSTER_RELEASE}"
           fi
-          if [[ "$OPERATION" == "deploy" ]]; then
+          if [[ "$OPERATION" == "update" ]]; then
             if git show-ref --tags --verify --quiet "refs/tags/${CLUSTER_RELEASE}"; then
               [[ "$(git rev-list -n 1 "${CLUSTER_RELEASE}")" == "$(git rev-parse HEAD)" ]] || {
                 echo "${CLUSTER_RELEASE} already exists on a different commit." >&2
@@ -256,14 +256,14 @@ jobs:
           fi
 
   result:
-    name: Applied ${{ needs.deploy.outputs.cluster_release }}
-    needs: deploy
+    name: Updated ${{ needs.update.outputs.cluster_release }}
+    needs: update
     runs-on: ubuntu-latest
 
     steps:
-      - name: Show deployment result
+      - name: Show desired-state result
         env:
-          CLUSTER_RELEASE: ${{ needs.deploy.outputs.cluster_release }}
+          CLUSTER_RELEASE: ${{ needs.update.outputs.cluster_release }}
           ENVIRONMENT: ${{ inputs.environment }}
           OPERATION: ${{ inputs.operation }}
         run: |
