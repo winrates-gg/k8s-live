@@ -15,6 +15,7 @@ backend:
   ingress:
     host: api.staging.winrates.gg
   config:
+    ndProduction: "0"
     ndLogLevel: "3"
     matchArchiveRetentionDays: "60"
     matchArchiveCleanupBatchSize: "500"

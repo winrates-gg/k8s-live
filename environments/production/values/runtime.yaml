@@ -15,6 +15,7 @@ backend:
   ingress:
     host: api.winrates.gg
   config:
+    ndProduction: "1"
     ndLogLevel: "0"
     matchArchiveRetentionDays: "60"
     matchArchiveCleanupBatchSize: "500"
