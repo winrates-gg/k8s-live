@@ -1,0 +1,9 @@
+environment: production
+k8sLiveRelease: cluster-v0.0.6
+backendRelease: backend-v0.0.5
+chartRelease: chart-v0.0.6
+backend:
+  apiImage:
+    tag: backend-v0.0.5
+  workerImage:
+    tag: backend-v0.0.5
