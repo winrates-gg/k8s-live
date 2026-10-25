@@ -1,5 +1,5 @@
 environment: production
-k8sLiveRelease: cluster-v0.0.8
+k8sLiveRelease: cluster-v0.0.9
 backendRelease: backend-v0.0.5
 chartRelease: chart-v0.0.7
 backend:
