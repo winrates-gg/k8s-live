@@ -24,5 +24,7 @@ backend:
     matchArchiveCleanupMaxRows: "5000"
 
 dashboard:
-  enabled: true
-  bucketName: wrgg-production-dashboard
+  enabled: false
+  image:
+    repository: 152088127544.dkr.ecr.us-east-2.amazonaws.com/wrgg-production-dashboard
+    pullPolicy: IfNotPresent

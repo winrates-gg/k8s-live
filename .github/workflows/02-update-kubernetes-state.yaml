@@ -28,7 +28,7 @@ on:
         required: false
         type: string
       dashboard_release:
-        description: "[UPDATE ONLY] [REQUIRED] Frontend Git tag for the private dashboard bundle, for example frontend-v1.34.8; ignored for rollback"
+        description: "[UPDATE ONLY] [REQUIRED] Dashboard image Git tag, for example dashboard-v1.34.8; ignored for rollback"
         required: false
         type: string
       rollback_tag:
@@ -105,8 +105,8 @@ jobs:
             echo "Update requires chart_release in the form chart-v1.34.8." >&2
             exit 1
           }
-          [[ "$DASHBOARD_RELEASE" =~ ^frontend-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
-            echo "Update requires dashboard_release in the form frontend-v1.34.8." >&2
+          [[ "$DASHBOARD_RELEASE" =~ ^dashboard-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
+            echo "Update requires dashboard_release in the form dashboard-v1.34.8." >&2
             exit 1
           }
           gh api "repos/winrates-gg/backend/git/ref/tags/${BACKEND_RELEASE}" >/dev/null
@@ -189,7 +189,9 @@ jobs:
             workerImage:
               tag: ${BACKEND_RELEASE}
           dashboard:
-            bundleTag: ${DASHBOARD_RELEASE}
+            enabled: true
+            image:
+              tag: ${DASHBOARD_RELEASE}
           EOF
           echo "cluster_release=${next_release}" >> "$GITHUB_OUTPUT"
 
@@ -212,7 +214,8 @@ jobs:
             grep -Eq "^backendRelease: ${BACKEND_RELEASE}$" "$state_file" || exit 1
             grep -Eq "^chartRelease: ${CHART_RELEASE}$" "$state_file" || exit 1
             grep -Eq "^dashboardRelease: ${DASHBOARD_RELEASE}$" "$state_file" || exit 1
-            grep -Eq "^  bundleTag: ${DASHBOARD_RELEASE}$" "$state_file" || exit 1
+            grep -Eq "^  enabled: true$" "$state_file" || exit 1
+            grep -Eq "^    tag: ${DASHBOARD_RELEASE}$" "$state_file" || exit 1
           fi
 
       - name: Print desired-state tag context
@@ -232,7 +235,7 @@ jobs:
           if [[ "$OPERATION" == "update" ]]; then
             echo "Backend tag: ${BACKEND_RELEASE}"
             echo "Helm chart tag: ${CHART_RELEASE}"
-            echo "Dashboard bundle tag: ${DASHBOARD_RELEASE}"
+            echo "Dashboard image tag: ${DASHBOARD_RELEASE}"
           else
             echo "Rollback tag: ${CLUSTER_RELEASE}"
           fi
@@ -293,6 +296,6 @@ jobs:
             echo "- Environment: ${ENVIRONMENT}"
             echo "- Operation: ${OPERATION}"
             if [[ "$OPERATION" == "update" ]]; then
-              echo "- Dashboard bundle: ${DASHBOARD_RELEASE}"
+              echo "- Dashboard image: ${DASHBOARD_RELEASE}"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

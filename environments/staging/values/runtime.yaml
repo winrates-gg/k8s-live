@@ -24,5 +24,7 @@ backend:
     matchArchiveCleanupMaxRows: "5000"
 
 dashboard:
-  enabled: true
-  bucketName: wrgg-staging-dashboard
+  enabled: false
+  image:
+    repository: 124188344567.dkr.ecr.us-east-2.amazonaws.com/wrgg-staging-dashboard
+    pullPolicy: IfNotPresent
