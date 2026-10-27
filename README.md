@@ -14,7 +14,7 @@ immutable Kubernetes desired-state revision.
 The target model is:
 
 ```text
-backend/chart tags
+backend/chart/dashboard tags
   -> cluster tag
   -> environment deployment file
   -> Argo reconciliation
@@ -36,15 +36,16 @@ deployments/staging.yaml
 deployments/production.yaml
 ```
 
-The cluster workflow runs from `main`, verifies the selected backend and Helm
+The cluster workflow runs from `main`, verifies the selected backend, Helm, and
 tags, writes the environment deployment file, and publishes a
 `cluster-v1.34.8`-shaped tag. Rollback runs through the same workflow with an
 explicit `rollback_tag` input. The workflow may also create an optional
 GitHub Release page. Frontend publication is separate: its workflow writes
-the selected bundle directly to the environment's S3 release and `current/`
-paths. The deployment file therefore selects only the immutable cluster,
-backend, and chart tags. Rollback selects an existing cluster tag and
-copies its environment state forward.
+the selected public bundle directly to the environment's S3 release and
+`current/` paths. The same frontend release also publishes a private dashboard
+bundle. The public frontend does not wait for Argo; the dashboard does,
+because its selected bundle is downloaded by the dashboard pod. Rollback
+selects an existing cluster tag and copies its environment state forward.
 
 ## Application order
 
@@ -92,6 +93,35 @@ uses it to constrain runtime workers; reconciliation jobs consume the same
 ConfigMap. Omitting the block renders all supported platforms. Expanding the
 launch scope is therefore a normal values change followed by cluster-tag
 validation and the normal staging/promotion flow.
+
+## Private operations dashboard
+
+The runtime chart can optionally render a WRGG-only dashboard deployment. It is
+disabled by default in the shared chart values and enabled explicitly by the
+staging and production overlays. The dashboard is a small React bundle built
+by the frontend repository. The frontend workflow publishes it to the private
+environment dashboard bucket under the selected `frontend-vN.N.N` release.
+
+The dashboard pod downloads that immutable bundle into an ephemeral volume,
+then uses the backend image in dashboard-only mode to serve the files and the
+private `/dashboard/data` endpoint. It reads New Destiny's temporary Redis
+counters and summarizes match-queue state from the environment database. It is
+not part of the public API application, and the browser does not contact S3.
+
+The dashboard is served through the existing private ingress on the control
+plane, alongside the private Argo CD surface:
+
+```text
+http://<control-plane-host>:8081/dashboard/
+```
+
+The port is intended to be reached through the private operator path (for
+example, the Tailscale-connected host), not through the public WR.GG domains.
+The dashboard refreshes its data every 30 seconds. New Destiny error metrics
+are enabled by default; admitted-request metrics are enabled for staging and
+disabled for production until traffic analysis is needed. The cluster desired
+state records the dashboard frontend tag alongside the backend and chart tags,
+so dashboard rollback follows the same cluster revision.
 
 The deployment file is the requested state. Argo health and Kubernetes state
 answer what actually rolled out; Git history preserves previous pointers for

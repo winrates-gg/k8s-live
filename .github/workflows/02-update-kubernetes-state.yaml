@@ -27,6 +27,10 @@ on:
         description: "[UPDATE ONLY] [REQUIRED] Helm chart Git tag, for example chart-v1.34.8; ignored for rollback"
         required: false
         type: string
+      dashboard_release:
+        description: "[UPDATE ONLY] [REQUIRED] Frontend Git tag for the private dashboard bundle, for example frontend-v1.34.8; ignored for rollback"
+        required: false
+        type: string
       rollback_tag:
         description: "[OPTIONAL] [ROLLBACK ONLY] Existing cluster-vN.N.N tag to restore; required when operation=rollback and ignored for update"
         required: false
@@ -72,7 +76,7 @@ jobs:
           client-id: ${{ vars.WRGG_GITOPS_READ_APP_ID }}
           private-key: ${{ secrets.WRGG_GITOPS_READ_APP_PRIVATE_KEY }}
           owner: winrates-gg
-          repositories: backend,k8s-helm-charts,k8s-live
+          repositories: backend,frontend,k8s-helm-charts,k8s-live
 
       - name: Validate selected k8s-live ref
         env:
@@ -91,6 +95,7 @@ jobs:
           GH_TOKEN: ${{ steps.read_token.outputs.token }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
+          DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
         run: |
           [[ "$BACKEND_RELEASE" =~ ^backend-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
             echo "Update requires backend_release in the form backend-v1.34.8." >&2
@@ -100,8 +105,13 @@ jobs:
             echo "Update requires chart_release in the form chart-v1.34.8." >&2
             exit 1
           }
+          [[ "$DASHBOARD_RELEASE" =~ ^frontend-v[0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,2}$ ]] || {
+            echo "Update requires dashboard_release in the form frontend-v1.34.8." >&2
+            exit 1
+          }
           gh api "repos/winrates-gg/backend/git/ref/tags/${BACKEND_RELEASE}" >/dev/null
           gh api "repos/winrates-gg/k8s-helm-charts/git/ref/tags/${CHART_RELEASE}" >/dev/null
+          gh api "repos/winrates-gg/frontend/git/ref/tags/${DASHBOARD_RELEASE}" >/dev/null
 
       - name: Validate current k8s-live source
         if: ${{ inputs.operation == 'update' }}
@@ -129,6 +139,7 @@ jobs:
           ENVIRONMENT: ${{ inputs.environment }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
+          DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
           ROLLBACK_TAG: ${{ inputs.rollback_tag }}
         run: |
           mkdir -p deployments
@@ -171,11 +182,14 @@ jobs:
           k8sLiveRelease: ${next_release}
           backendRelease: ${BACKEND_RELEASE}
           chartRelease: ${CHART_RELEASE}
+          dashboardRelease: ${DASHBOARD_RELEASE}
           backend:
             apiImage:
               tag: ${BACKEND_RELEASE}
             workerImage:
               tag: ${BACKEND_RELEASE}
+          dashboard:
+            bundleTag: ${DASHBOARD_RELEASE}
           EOF
           echo "cluster_release=${next_release}" >> "$GITHUB_OUTPUT"
 
@@ -185,6 +199,7 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
+          DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
         run: |
           state_file="deployments/${ENVIRONMENT}.yaml"
           test -s "$state_file" || {
@@ -196,6 +211,8 @@ jobs:
           if [[ "$OPERATION" == "update" ]]; then
             grep -Eq "^backendRelease: ${BACKEND_RELEASE}$" "$state_file" || exit 1
             grep -Eq "^chartRelease: ${CHART_RELEASE}$" "$state_file" || exit 1
+            grep -Eq "^dashboardRelease: ${DASHBOARD_RELEASE}$" "$state_file" || exit 1
+            grep -Eq "^  bundleTag: ${DASHBOARD_RELEASE}$" "$state_file" || exit 1
           fi
 
       - name: Print desired-state tag context
@@ -205,6 +222,7 @@ jobs:
           CLUSTER_RELEASE: ${{ steps.state.outputs.cluster_release }}
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
+          DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
         run: |
           latest_tag="$(git tag --list 'cluster-v*' | sort -V | tail -1)"
           echo "Latest cluster tag: ${latest_tag:-none}"
@@ -214,6 +232,7 @@ jobs:
           if [[ "$OPERATION" == "update" ]]; then
             echo "Backend tag: ${BACKEND_RELEASE}"
             echo "Helm chart tag: ${CHART_RELEASE}"
+            echo "Dashboard bundle tag: ${DASHBOARD_RELEASE}"
           else
             echo "Rollback tag: ${CLUSTER_RELEASE}"
           fi
@@ -266,10 +285,14 @@ jobs:
           CLUSTER_RELEASE: ${{ needs.update.outputs.cluster_release }}
           ENVIRONMENT: ${{ inputs.environment }}
           OPERATION: ${{ inputs.operation }}
+          DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
         run: |
           {
             echo "## Kubernetes desired-state update"
             echo "- Cluster tag: ${CLUSTER_RELEASE}"
             echo "- Environment: ${ENVIRONMENT}"
             echo "- Operation: ${OPERATION}"
+            if [[ "$OPERATION" == "update" ]]; then
+              echo "- Dashboard bundle: ${DASHBOARD_RELEASE}"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

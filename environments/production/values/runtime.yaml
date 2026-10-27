@@ -17,6 +17,12 @@ backend:
   config:
     ndProduction: "1"
     ndLogLevel: "0"
+    ndEnableErrorMetrics: "1"
+    ndEnableRequestMetrics: "1"
     matchArchiveRetentionDays: "60"
     matchArchiveCleanupBatchSize: "500"
     matchArchiveCleanupMaxRows: "5000"
+
+dashboard:
+  enabled: true
+  bucketName: wrgg-production-dashboard
