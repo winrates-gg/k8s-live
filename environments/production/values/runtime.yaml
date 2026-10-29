@@ -28,3 +28,8 @@ dashboard:
   image:
     repository: 152088127544.dkr.ecr.us-east-2.amazonaws.com/wrgg-production-dashboard
     pullPolicy: IfNotPresent
+
+# Temporary production stress-test posture. Revert these values after testing.
+matchWorkerReplicas: 3
+ladderLoopSleepSeconds: 1
+matchWorkerDrainThrottleSeconds: 1
