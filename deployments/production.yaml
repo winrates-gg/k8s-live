@@ -1,7 +1,7 @@
 environment: production
-k8sLiveRelease: cluster-v0.0.25
+k8sLiveRelease: cluster-v0.0.26
 backendRelease: backend-v0.0.17
-chartRelease: chart-v0.0.11
+chartRelease: chart-v0.0.12
 dashboardRelease: dashboard-v0.0.9
 backend:
   apiImage:
