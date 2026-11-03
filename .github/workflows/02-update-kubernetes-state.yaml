@@ -51,6 +51,7 @@ jobs:
 
     outputs:
       cluster_release: ${{ steps.state.outputs.cluster_release }}
+      desired_state: ${{ steps.desired_state.outputs.content }}
 
     steps:
       - name: Create repository write token
@@ -218,6 +219,18 @@ jobs:
             grep -Eq "^    tag: ${DASHBOARD_RELEASE}$" "$state_file" || exit 1
           fi
 
+      - name: Capture generated desired state
+        id: desired_state
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          state_file="deployments/${ENVIRONMENT}.yaml"
+          {
+            echo "content<<WRGG_DESIRED_STATE"
+            cat "$state_file"
+            echo "WRGG_DESIRED_STATE"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Print desired-state tag context
         env:
           OPERATION: ${{ inputs.operation }}
@@ -226,6 +239,7 @@ jobs:
           BACKEND_RELEASE: ${{ inputs.backend_release }}
           CHART_RELEASE: ${{ inputs.chart_release }}
           DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
+          DESIRED_STATE: ${{ steps.desired_state.outputs.content }}
         run: |
           latest_tag="$(git tag --list 'cluster-v*' | sort -V | tail -1)"
           echo "Latest cluster tag: ${latest_tag:-none}"
@@ -239,6 +253,8 @@ jobs:
           else
             echo "Rollback tag: ${CLUSTER_RELEASE}"
           fi
+          echo "Full desired state:"
+          printf '%s\n' "$DESIRED_STATE"
 
       - name: Commit and publish desired state
         env:
@@ -288,14 +304,16 @@ jobs:
           CLUSTER_RELEASE: ${{ needs.update.outputs.cluster_release }}
           ENVIRONMENT: ${{ inputs.environment }}
           OPERATION: ${{ inputs.operation }}
-          DASHBOARD_RELEASE: ${{ inputs.dashboard_release }}
+          DESIRED_STATE: ${{ needs.update.outputs.desired_state }}
         run: |
           {
             echo "## Kubernetes desired-state update"
             echo "- Cluster tag: ${CLUSTER_RELEASE}"
             echo "- Environment: ${ENVIRONMENT}"
             echo "- Operation: ${OPERATION}"
-            if [[ "$OPERATION" == "update" ]]; then
-              echo "- Dashboard image: ${DASHBOARD_RELEASE}"
-            fi
+            echo "- Desired state file: deployments/${ENVIRONMENT}.yaml"
+            echo
+            echo '```yaml'
+            printf '%s\n' "$DESIRED_STATE"
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
