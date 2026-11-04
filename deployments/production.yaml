@@ -1,13 +1,13 @@
 environment: production
-k8sLiveRelease: cluster-v0.0.31
-backendRelease: backend-v0.0.21
+k8sLiveRelease: cluster-v0.0.34
+backendRelease: backend-v0.0.22
 chartRelease: chart-v0.0.15
 dashboardRelease: dashboard-v0.0.10
 backend:
   apiImage:
-    tag: backend-v0.0.21
+    tag: backend-v0.0.22
   workerImage:
-    tag: backend-v0.0.21
+    tag: backend-v0.0.22
 dashboard:
   enabled: true
   image:
