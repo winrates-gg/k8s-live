@@ -1,4 +1,4 @@
-environment: production
+deploymentEnvironment: production
 
 backend:
   apiImage:

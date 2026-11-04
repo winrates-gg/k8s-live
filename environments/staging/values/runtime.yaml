@@ -1,4 +1,6 @@
-environment: staging
+deploymentEnvironment: staging
+# Explicit staging public website bucket. The dashboard has a separate image path.
+publicSiteBucket: wrgg-staging-site
 
 deploymentScope:
   releaseStage: na-beta
@@ -15,16 +17,27 @@ backend:
   ingress:
     host: api.staging.winrates.gg
   config:
-    ndProduction: "1"
+    # Staging uses a non-production Riot key and New Destiny's non-production model.
+    ndProduction: "0"
+    # Keep diagnostic logging and both metric families enabled while staging is exercised.
     ndLogLevel: "3"
     ndEnableErrorMetrics: "1"
     ndEnableRequestMetrics: "1"
+    # Staging uses a lower evidence floor so sparse test data remains inspectable.
+    analyticsTierListMinGames: "30"
+    analyticsTierListMinPickRate: "0.5"
+    analyticsTierCohortMinGames: "20"
+    # Keep the same archive lifecycle and cleanup batches as production.
     matchArchiveRetentionDays: "60"
     matchArchiveCleanupBatchSize: "500"
     matchArchiveCleanupMaxRows: "5000"
 
+# Staging keeps one match worker and uses the slower, lower-pressure posture.
+matchWorkerReplicas: 1
+ladderLoopSleepSeconds: 5
+matchWorkerDrainThrottleSeconds: 5
+
 dashboard:
-  enabled: false
   image:
     repository: 124188344567.dkr.ecr.us-east-2.amazonaws.com/wrgg-staging-dashboard
     pullPolicy: IfNotPresent

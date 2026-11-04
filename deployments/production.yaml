@@ -1,4 +1,4 @@
-environment: production
+deploymentEnvironment: production
 k8sLiveRelease: cluster-v0.0.26
 backendRelease: backend-v0.0.17
 chartRelease: chart-v0.0.12

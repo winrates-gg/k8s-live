@@ -1,4 +1,4 @@
-environment: staging
+deploymentEnvironment: staging
 k8sLiveRelease: cluster-v0.0.27
 backendRelease: backend-v0.0.18
 chartRelease: chart-v0.0.13

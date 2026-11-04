@@ -1,4 +1,6 @@
-environment: production
+deploymentEnvironment: production
+# Explicit production public website bucket. The dashboard has a separate image path.
+publicSiteBucket: wrgg-production-site
 
 deploymentScope:
   releaseStage: na-beta
@@ -15,21 +17,27 @@ backend:
   ingress:
     host: api.winrates.gg
   config:
+    # Production uses the production Riot key and New Destiny's production model.
     ndProduction: "1"
+    # Production keeps normal logging with both metric families enabled for operations.
     ndLogLevel: "0"
     ndEnableErrorMetrics: "1"
     ndEnableRequestMetrics: "1"
+    # Production uses the normal evidence floor for public analytics.
+    analyticsTierListMinGames: "100"
+    analyticsTierListMinPickRate: "0.5"
+    analyticsTierCohortMinGames: "20"
+    # Keep archive retention and cleanup policy explicit at the environment call site.
     matchArchiveRetentionDays: "60"
     matchArchiveCleanupBatchSize: "500"
     matchArchiveCleanupMaxRows: "5000"
 
-dashboard:
-  enabled: false
-  image:
-    repository: 152088127544.dkr.ecr.us-east-2.amazonaws.com/wrgg-production-dashboard
-    pullPolicy: IfNotPresent
-
-# Production worker posture.
+# Production runs three match workers with the higher-throughput posture.
 matchWorkerReplicas: 3
 ladderLoopSleepSeconds: 1
 matchWorkerDrainThrottleSeconds: 1
+
+dashboard:
+  image:
+    repository: 152088127544.dkr.ecr.us-east-2.amazonaws.com/wrgg-production-dashboard
+    pullPolicy: IfNotPresent
