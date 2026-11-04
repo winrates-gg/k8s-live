@@ -1,13 +1,13 @@
-deploymentEnvironment: staging
-k8sLiveRelease: cluster-v0.0.29
-backendRelease: backend-v0.0.20
-chartRelease: chart-v0.0.14
+environment: staging
+k8sLiveRelease: cluster-v0.0.32
+backendRelease: backend-v0.0.21
+chartRelease: chart-v0.0.15
 dashboardRelease: dashboard-v0.0.10
 backend:
   apiImage:
-    tag: backend-v0.0.20
+    tag: backend-v0.0.21
   workerImage:
-    tag: backend-v0.0.20
+    tag: backend-v0.0.21
 dashboard:
   enabled: true
   image:
