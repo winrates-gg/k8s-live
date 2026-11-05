@@ -84,14 +84,13 @@ recovery path for a broken or misconfigured cluster host. Once the replacement
 host is ready, the root Applications and this ApplicationSet recreate the
 desired application state from Git.
 
-The environment runtime values own the optional deployment scope. For the
-current NA beta they contain
-`{"releaseStage":"na-beta","platforms":{"na1":"americas"}}`.
-Helm conditionally renders that scope into the shared backend ConfigMap and
-uses it to constrain runtime workers; reconciliation jobs consume the same
-ConfigMap. Omitting the block renders all supported platforms. Expanding the
-launch scope is therefore a normal values change followed by cluster-tag
-validation and the normal staging/promotion flow.
+The environment runtime values own the deployment scope. Scope is regional, so
+the current Americas beta contains `{"releaseStage":"americas-beta","regions":["americas"]}`.
+The chart owns the platform catalog and derives `na1`, `br1`, `la1`, and `la2`
+from that region. Helm renders the regional scope into the shared backend
+ConfigMap and uses it to constrain runtime workers; reconciliation jobs consume
+the same ConfigMap. Expanding the launch scope is therefore a normal values
+change followed by cluster-tag validation and the normal staging/promotion flow.
 
 ## Private operations dashboard
 

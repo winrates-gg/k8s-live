@@ -3,9 +3,9 @@ deploymentEnvironment: production
 publicSiteBucket: wrgg-production-site
 
 deploymentScope:
-  releaseStage: na-beta
-  platforms:
-    na1: americas
+  releaseStage: americas-beta
+  regions:
+    - americas
 
 backend:
   apiImage:

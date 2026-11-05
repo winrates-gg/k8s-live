@@ -3,9 +3,9 @@ deploymentEnvironment: staging
 publicSiteBucket: wrgg-staging-site
 
 deploymentScope:
-  releaseStage: na-beta
-  platforms:
-    na1: americas
+  releaseStage: americas-beta
+  regions:
+    - americas
 
 backend:
   apiImage:
